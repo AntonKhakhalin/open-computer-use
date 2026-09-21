@@ -1,4 +1,5 @@
 import AppKit
+import CoreGraphics
 import CoreServices
 import Foundation
 
@@ -7,6 +8,19 @@ public struct RunningAppDescriptor {
     public let bundleIdentifier: String?
     public let pid: pid_t
     public let runningApplication: NSRunningApplication
+}
+
+public struct AppLaunchWindow {
+    public let id: CGWindowID
+    public let title: String?
+}
+
+public struct AppLaunchResult {
+    public let pid: pid_t
+    public let name: String
+    public let bundleIdentifier: String?
+    public let windows: [AppLaunchWindow]
+    public let reusedExistingInstance: Bool
 }
 
 struct ListedAppDescriptor {
@@ -164,6 +178,128 @@ enum AppDiscovery {
         }
 
         throw ComputerUseError.appNotFound(normalizedQuery)
+    }
+
+    // launch_app: launch through NSWorkspace/LaunchServices (never AppleScript),
+    // reuse a running instance instead of spawning duplicates, and keep the
+    // launch in the background so the user's foreground focus is preserved.
+    static func launch(_ query: String) throws -> AppLaunchResult {
+        let normalizedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedQuery.isEmpty else {
+            throw ComputerUseError.invalidArguments("app must be a non-empty app name or bundle identifier")
+        }
+
+        if isBundleIdentifierQuery(normalizedQuery), AppSafetyPolicy.isBlocked(bundleIdentifier: normalizedQuery) {
+            throw AppSafetyPolicy.permissionDenied(bundleIdentifier: normalizedQuery)
+        }
+
+        if let running = resolvedRunningApp(in: runningApps(), matching: normalizedQuery) {
+            return launchResult(for: running, reusedExistingInstance: true)
+        }
+
+        let appURL: URL
+        let fileManager = FileManager.default
+        if normalizedQuery.contains("/"), fileManager.fileExists(atPath: normalizedQuery) {
+            appURL = URL(fileURLWithPath: normalizedQuery)
+        } else if isBundleIdentifierQuery(normalizedQuery) {
+            guard let resolvedURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: normalizedQuery) else {
+                throw ComputerUseError.appNotFound(normalizedQuery)
+            }
+            appURL = resolvedURL
+        } else if let resolvedURL = applicationURL(named: normalizedQuery) {
+            appURL = resolvedURL
+        } else {
+            throw ComputerUseError.appNotFound(normalizedQuery)
+        }
+
+        if AppSafetyPolicy.isBlocked(bundleIdentifier: Bundle(url: appURL)?.bundleIdentifier) {
+            throw AppSafetyPolicy.permissionDenied(
+                bundleIdentifier: Bundle(url: appURL)?.bundleIdentifier ?? normalizedQuery
+            )
+        }
+
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = false
+        let launchedBox = LaunchedApplicationBox()
+        let semaphore = DispatchSemaphore(value: 0)
+
+        NSWorkspace.shared.openApplication(at: appURL, configuration: configuration) { application, error in
+            launchedBox.application = application
+            launchedBox.error = error
+            semaphore.signal()
+        }
+
+        waitForSignal(semaphore)
+
+        if let launchError = launchedBox.error {
+            throw ComputerUseError.message(
+                "launchFailed(\"\(normalizedQuery)\"): \(launchError.localizedDescription)"
+            )
+        }
+
+        guard let application = launchedBox.application else {
+            throw ComputerUseError.appNotFound(normalizedQuery)
+        }
+
+        let descriptor = RunningAppDescriptor(
+            name: appName(application),
+            bundleIdentifier: application.bundleIdentifier,
+            pid: application.processIdentifier,
+            runningApplication: application
+        )
+
+        // Give the app a brief moment to create its first window so the
+        // response can report available windows; windowless apps are still
+        // a successful launch (the windows list simply stays empty).
+        for _ in 0..<25 {
+            if !windows(for: descriptor.pid).isEmpty {
+                break
+            }
+            Thread.sleep(forTimeInterval: 0.1)
+        }
+
+        return launchResult(for: descriptor, reusedExistingInstance: false)
+    }
+
+    private static func launchResult(for descriptor: RunningAppDescriptor, reusedExistingInstance: Bool) -> AppLaunchResult {
+        AppLaunchResult(
+            pid: descriptor.pid,
+            name: descriptor.name,
+            bundleIdentifier: descriptor.bundleIdentifier,
+            windows: windows(for: descriptor.pid),
+            reusedExistingInstance: reusedExistingInstance
+        )
+    }
+
+    static func windows(for pid: pid_t) -> [AppLaunchWindow] {
+        guard let infoList = CGWindowListCopyWindowInfo([], kCGNullWindowID) as? [[String: Any]] else {
+            return []
+        }
+
+        return infoList.compactMap { info in
+            guard
+                let ownerPID = info[kCGWindowOwnerPID as String] as? pid_t,
+                ownerPID == pid,
+                let layer = info[kCGWindowLayer as String] as? Int,
+                layer == 0,
+                let number = info[kCGWindowNumber as String] as? NSNumber,
+                let bounds = info[kCGWindowBounds as String] as? [String: Any],
+                (bounds["Width"] as? CGFloat ?? 0) > 0,
+                (bounds["Height"] as? CGFloat ?? 0) > 0
+            else {
+                return nil
+            }
+
+            return AppLaunchWindow(
+                id: CGWindowID(number.uint32Value),
+                title: info[kCGWindowName as String] as? String
+            )
+        }
+    }
+
+    private final class LaunchedApplicationBox: @unchecked Sendable {
+        var application: NSRunningApplication?
+        var error: Error?
     }
 
     private static func resolvedRunningApp(in descriptors: [RunningAppDescriptor], matching query: String) -> RunningAppDescriptor? {
