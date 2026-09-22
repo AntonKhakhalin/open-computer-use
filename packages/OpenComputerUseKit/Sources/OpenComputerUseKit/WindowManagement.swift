@@ -38,9 +38,39 @@ struct CGWindowEntry: Equatable {
     let frontToBackIndex: Int
 }
 
+/// Outcome of the AX-identity liveness check for one CGWindowID.
+///
+/// Closed windows and AppKit helper windows can linger in the full
+/// (`optionAll`) CGWindow list long after the window is gone, sometimes for
+/// minutes at alpha 1.0. The only reliable way to distinguish such entries
+/// from live windows is the owning app's accessibility window list: a live
+/// window appears in `AXWindows` and maps back to its CGWindowID via
+/// `_AXUIElementGetWindow` (see `AXWindowIdentitySPI`).
+enum WindowIdentity {
+    /// The owning app's accessibility window list contains a window whose
+    /// backing CGWindowID is exactly the checked id.
+    case confirmed
+    /// The owning app's accessibility window list was read completely, every
+    /// listed window was mapped to its CGWindowID, and none match. The CG
+    /// entry has no live accessibility identity (closed/lingering window or
+    /// AppKit helper window) and must be reported stale.
+    case absent
+    /// The check could not be run or completed: the private mapping symbol is
+    /// unavailable, the app does not expose an accessibility window list, or
+    /// at least one listed window could not be mapped. No conclusion; the
+    /// window must not be rejected on the basis of this check.
+    case indeterminate
+}
+
+/// Injection seam for the AX-identity liveness check (`nil` in production
+/// means the real check); tests pin the resolution order with fixed
+/// verdicts so they never depend on the live system state.
+typealias WindowIdentityCheck = (_ pid: pid_t, _ windowID: CGWindowID) -> WindowIdentity
+
 /// A window id that passed the official liveness and safety checks: the
-/// window is in the current window list, its owning process is running, and
-/// the owning app is not on the deny list.
+/// window is in the current window list, its owning process is running, the
+/// owning app is not on the deny list, and the AX-identity check does not
+/// definitively prove the window is closed.
 struct ResolvedWindow {
     let ref: WindowRef
     let pid: pid_t
@@ -193,12 +223,15 @@ enum WindowDirectory {
     // MARK: - Resolution
 
     /// Resolves a CGWindowID against the current window list and running
-    /// apps: stale-window, dead-process, and deny-list checks in the
-    /// official order.
+    /// apps: stale-window, dead-process, deny-list, and AX-identity checks
+    /// in the official order. A CG entry that lingers in the full window
+    /// list without a live accessibility identity (closed window) is
+    /// reported with the same official stale error as an absent id.
     static func resolve(
         id: CGWindowID,
         entries: [CGWindowEntry]? = nil,
-        runningApps: [RunningAppDescriptor]? = nil
+        runningApps: [RunningAppDescriptor]? = nil,
+        identity: WindowIdentityCheck? = nil
     ) throws -> ResolvedWindow {
         let windowList = entries ?? listEntries(onScreenOnly: false)
         guard let entry = windowList.first(where: { $0.windowID == id }) else {
@@ -221,6 +254,18 @@ enum WindowDirectory {
 
         if let bundleIdentifier = descriptor.bundleIdentifier, AppSafetyPolicy.isBlocked(bundleIdentifier: bundleIdentifier) {
             throw AppSafetyPolicy.permissionDenied(bundleIdentifier: bundleIdentifier)
+        }
+
+        // The deny list runs before the AX check so a blocked app's
+        // accessibility tree is never queried. `.absent` proves the CG entry
+        // is a lingering closed/helper window; `.indeterminate` never
+        // rejects (an unverifiable window is treated as live, per the
+        // documented guarantee — no alpha/bounds/layer heuristics).
+        let check = identity ?? WindowDirectory.windowIdentity
+        if check(entry.ownerPID, id) == .absent {
+            throw ComputerUseError.message(
+                "staleWindowHandle(\(id)): the window is no longer open; re-observe with list_windows."
+            )
         }
 
         return ResolvedWindow(
@@ -260,10 +305,21 @@ enum WindowDirectory {
 
             if targetWindow == nil {
                 appElement = AXUIElementCreateApplication(resolved.pid)
-                targetWindow = matchAXWindow(
+                switch matchAXWindow(
                     appElement: appElement!,
                     entry: WindowDirectory.currentEntry(for: resolved.ref.id) ?? resolved.entry
-                )
+                ) {
+                case .matched(let window):
+                    targetWindow = window
+                case .ambiguous(let count):
+                    // Raising an arbitrary same-bounds window would focus
+                    // the wrong one; fail explicitly instead.
+                    throw ComputerUseError.message(
+                        ambiguousWindowMessage(id: resolved.ref.id, app: resolved.ref.app, count: count)
+                    )
+                case .notFound:
+                    break
+                }
             }
 
             if let window = targetWindow {
@@ -290,6 +346,44 @@ enum WindowDirectory {
         listEntries(onScreenOnly: false).first(where: { $0.windowID == id })
     }
 
+    /// AX-identity liveness check for one CGWindowID: reads the owning app's
+    /// accessibility window list and maps every window to its backing
+    /// CGWindowID. `.confirmed` on an exact match, `.absent` when the list
+    /// was read completely and nothing matched (the window is closed and
+    /// only its CG entry lingers), `.indeterminate` whenever any step of the
+    /// check is unavailable (missing private symbol, no AX window list, or a
+    /// window that cannot be mapped) — indeterminate never rejects.
+    static func windowIdentity(pid: pid_t, windowID: CGWindowID) -> WindowIdentity {
+        guard AXWindowIdentitySPI.shared.isAvailable else {
+            return .indeterminate
+        }
+
+        let appElement = AXUIElementCreateApplication(pid)
+        guard let windows = axArray(of: appElement, attribute: kAXWindowsAttribute as String) else {
+            return .indeterminate
+        }
+
+        for element in windows {
+            // Real windows carry CGWindowIDs; skip anything provably not a
+            // window, but attempt the mapping when the role is unreadable so
+            // an unknown element can never cause a false rejection.
+            if let role = axString(of: element, attribute: kAXRoleAttribute as String),
+               role != kAXWindowRole as String
+            {
+                continue
+            }
+
+            guard let mapped = AXWindowIdentitySPI.shared.windowID(for: element) else {
+                return .indeterminate
+            }
+            if mapped == windowID {
+                return .confirmed
+            }
+        }
+
+        return .absent
+    }
+
     static func isFrontmost(_ pid: pid_t, focusedWindow: AXUIElement?) -> Bool {
         if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid {
             return true
@@ -309,7 +403,9 @@ enum WindowDirectory {
 
     private static func unminimizeIfNeeded(_ pid: pid_t, windowID: CGWindowID) {
         let appElement = AXUIElementCreateApplication(pid)
-        guard let window = matchAXWindow(appElement: appElement, entry: currentEntry(for: windowID) ?? CGWindowEntry(windowID: windowID, ownerPID: pid, layer: 0, bounds: .zero, title: nil, frontToBackIndex: 0)) else {
+        // No unminimize on an ambiguous or missing match: the activation
+        // path reports the ambiguity explicitly instead.
+        guard case .matched(let window) = matchAXWindow(appElement: appElement, entry: currentEntry(for: windowID) ?? CGWindowEntry(windowID: windowID, ownerPID: pid, layer: 0, bounds: .zero, title: nil, frontToBackIndex: 0)) else {
             return
         }
 
@@ -334,12 +430,28 @@ enum WindowDirectory {
 
     // MARK: - Accessibility window matching
 
-    /// Matches the app's accessibility windows to a CGWindowID by geometry.
-    /// Titles are only a tie-breaker — identical titles are common, and the
-    /// CGWindowID (plus its bounds) is the authoritative identity.
-    static func matchAXWindow(appElement: AXUIElement, entry: CGWindowEntry) -> AXUIElement? {
+    /// Result of matching the app's accessibility windows to one CGWindowID.
+    /// `.ambiguous` is only reachable when the identity mapping is
+    /// unavailable or incomplete: several windows share the target's bounds
+    /// and no tie-breaker identifies one, so the caller must surface an
+    /// explicit error instead of guessing (a wrong guess would pair window
+    /// A's capture with window B's accessibility tree).
+    enum AXWindowMatch {
+        case matched(AXUIElement)
+        case ambiguous(count: Int)
+        case notFound
+    }
+
+    /// Matches the app's accessibility windows to a CGWindowID. Identity
+    /// first: when the private AX→CGWindowID mapping is available and any
+    /// candidate maps to exactly the entry's id, that window is the match
+    /// regardless of geometry (same-bounds windows are unambiguous).
+    /// Otherwise frame geometry with title/focused tie-breakers; several
+    /// same-bounds candidates with no unique tie-break report
+    /// `.ambiguous` rather than returning the first candidate.
+    static func matchAXWindow(appElement: AXUIElement, entry: CGWindowEntry) -> AXWindowMatch {
         guard let windows = axArray(of: appElement, attribute: kAXWindowsAttribute as String) else {
-            return nil
+            return .notFound
         }
 
         let focused = axElement(of: appElement, attribute: kAXFocusedWindowAttribute as String)
@@ -359,6 +471,30 @@ enum WindowDirectory {
             )
         }
 
+        // Exact identity: the private mapping resolves the window by its
+        // CGWindowID, independent of bounds (windows at identical bounds are
+        // common — e.g. a window opened at the previous window's frame).
+        if AXWindowIdentitySPI.shared.isAvailable {
+            var allMapped = true
+            for candidate in candidates {
+                guard let mapped = AXWindowIdentitySPI.shared.windowID(for: candidate.element) else {
+                    allMapped = false
+                    break
+                }
+                if mapped == entry.windowID {
+                    return .matched(candidate.element)
+                }
+            }
+            if allMapped {
+                // Every accessibility window was mapped and none is this
+                // id: the window is not among the app's live windows (a
+                // closed window whose CG entry lingers).
+                return .notFound
+            }
+            // At least one candidate could not be mapped: fall back to
+            // frame geometry below rather than concluding absence.
+        }
+
         let target = entry.bounds
         let tolerance: CGFloat = 2
         func frameMatches(_ frame: CGRect) -> Bool {
@@ -371,22 +507,32 @@ enum WindowDirectory {
         let frameMatches = candidates.filter { frameMatches($0.frame) }
         if !frameMatches.isEmpty {
             if let titled = frameMatches.first(where: { entry.title?.isEmpty == false && $0.title == entry.title }) {
-                return titled.element
+                return .matched(titled.element)
             }
             if let focusedMatch = frameMatches.first(where: { $0.isFocused }) {
-                return focusedMatch.element
+                return .matched(focusedMatch.element)
             }
-            return frameMatches.first?.element
+            if frameMatches.count == 1 {
+                return .matched(frameMatches.first!.element)
+            }
+            return .ambiguous(count: frameMatches.count)
         }
 
         // Last resort: a uniquely titled window (never titles alone when
         // several candidates share the title).
         guard let title = entry.title, !title.isEmpty else {
-            return nil
+            return .notFound
         }
 
         let titleMatches = candidates.filter { $0.title == title }
-        return titleMatches.count == 1 ? titleMatches.first?.element : nil
+        return titleMatches.count == 1 ? .matched(titleMatches.first!.element) : .notFound
+    }
+
+    /// Explicit error for same-bounds ambiguity: the capture is per
+    /// CGWindowID (correct) but the accessibility tree could not be matched
+    /// to the same window, so the pair must not be served.
+    static func ambiguousWindowMessage(id: CGWindowID, app: String, count: Int) -> String {
+        "ambiguousWindow(\(id)): \(count) windows of \(app) share the same bounds; the accessibility tree cannot be matched to this window. Move or resize one of them and re-observe with list_windows."
     }
 
     // MARK: - Capture

@@ -219,10 +219,16 @@ final class FixtureAppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDele
 
     // Multi-window support for the window2 surface: an optional second
     // top-level window (openable/closable, title configurable so identical
-    // titles can be exercised) and a fixture dialog window.
-    private func buildSecondWindow(title: String) {
-        guard secondWindow == nil else {
-            secondWindow?.title = title
+    // titles can be exercised; `sameBounds` places it at exactly the main
+    // window's frame so same-bounds identity resolution can be exercised)
+    // and a fixture dialog window.
+    private func buildSecondWindow(title: String, sameBounds: Bool = false) {
+        if let existing = secondWindow {
+            existing.title = title
+            if sameBounds {
+                existing.setFrame(window.frame, display: true)
+            }
+            updateExportedState()
             return
         }
 
@@ -233,7 +239,13 @@ final class FixtureAppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDele
             backing: .buffered,
             defer: false
         )
+        // `setFrame` addresses the outer frame (title bar included), i.e.
+        // the exact CGWindow bounds — required for the same-bounds case.
+        if sameBounds {
+            second.setFrame(frame, display: true)
+        }
         second.title = title
+        second.setAccessibilityIdentifier("fixture-second-window")
         second.delegate = self
         second.isReleasedWhenClosed = false
 
@@ -465,9 +477,19 @@ final class FixtureAppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDele
             updateExportedState()
         case ("open_window", "fixture-second"):
             buildSecondWindow(title: command.value ?? "Fixture Second Window")
+        case ("open_window", "fixture-second-same-bounds"):
+            buildSecondWindow(title: command.value ?? "Fixture Second Window", sameBounds: true)
         case ("close_window", "fixture-second"):
             if secondWindow != nil {
                 handleSecondWindowClose()
+            }
+        case ("minimize_window", "fixture-second"):
+            if let secondWindow {
+                secondWindow.miniaturize(nil)
+            }
+        case ("restore_window", "fixture-second"):
+            if let secondWindow {
+                secondWindow.deminiaturize(nil)
             }
         case ("show_dialog", "fixture-dialog"):
             buildDialogWindow()

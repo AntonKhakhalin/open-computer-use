@@ -255,15 +255,33 @@ enum SnapshotBuilder {
         let focusedApplication = copyElement(systemWide, attribute: kAXFocusedApplicationAttribute)
 
         var targetEntry = resolved.entry
-        var rootWindow = WindowDirectory.matchAXWindow(appElement: appElement, entry: targetEntry)
+
+        // The accessibility root must be the window backing the captured
+        // CGWindowID. Same-bounds ambiguity fails explicitly instead of
+        // guessing: serving window A's capture with window B's tree is a
+        // correctness violation.
+        func rootWindowElement(for entry: CGWindowEntry) throws -> AXUIElement? {
+            switch WindowDirectory.matchAXWindow(appElement: appElement, entry: entry) {
+            case .matched(let window):
+                return window
+            case .ambiguous(let count):
+                throw ComputerUseError.message(
+                    WindowDirectory.ambiguousWindowMessage(id: resolved.ref.id, app: app.name, count: count)
+                )
+            case .notFound:
+                return nil
+            }
+        }
+
+        var rootWindow = try rootWindowElement(for: targetEntry)
         if rootWindow == nil, recoveryPolicy == .allowActivation {
             if let refreshedEntry = WindowDirectory.currentEntry(for: resolved.ref.id) {
                 targetEntry = refreshedEntry
-                rootWindow = WindowDirectory.matchAXWindow(appElement: appElement, entry: targetEntry)
+                rootWindow = try rootWindowElement(for: targetEntry)
             }
             if rootWindow == nil, recoverVisibleWindow(for: app, appElement: appElement, preferredWindow: nil) {
                 targetEntry = WindowDirectory.currentEntry(for: resolved.ref.id) ?? targetEntry
-                rootWindow = WindowDirectory.matchAXWindow(appElement: appElement, entry: targetEntry)
+                rootWindow = try rootWindowElement(for: targetEntry)
             }
         }
 

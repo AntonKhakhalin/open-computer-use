@@ -179,12 +179,79 @@ final class WindowManagementTests: XCTestCase {
         let entry = syntheticEntry(id: 10, pid: 1234)
         let app = syntheticApp(name: "Example", bundleIdentifier: "com.example.app", pid: 1234)
 
-        let resolved = try WindowDirectory.resolve(id: 10, entries: [entry], runningApps: [app])
+        let resolved = try WindowDirectory.resolve(
+            id: 10,
+            entries: [entry],
+            runningApps: [app],
+            identity: { _, _ in .indeterminate }
+        )
 
         XCTAssertEqual(resolved.ref, WindowRef(app: "Example", id: 10, title: "Synthetic"))
         XCTAssertEqual(resolved.pid, 1234)
         XCTAssertEqual(resolved.bundleIdentifier, "com.example.app")
         XCTAssertEqual(resolved.entry.bounds, entry.bounds)
+    }
+
+    func testResolveLingeringEntryWithoutAXIdentityIsStale() {
+        let entry = syntheticEntry(id: 10, pid: 1234)
+        let app = syntheticApp(name: "Example", bundleIdentifier: "com.example.app", pid: 1234)
+
+        // A CG entry that lingers in the full window list after close has no
+        // live accessibility identity: the AX-identity check proves absence
+        // and the official stale error applies.
+        XCTAssertThrowsError(try WindowDirectory.resolve(
+            id: 10,
+            entries: [entry],
+            runningApps: [app],
+            identity: { _, _ in .absent }
+        )) { error in
+            XCTAssertEqual(
+                (error as? ComputerUseError)?.errorDescription,
+                "staleWindowHandle(10): the window is no longer open; re-observe with list_windows."
+            )
+        }
+    }
+
+    func testResolveConfirmedAXIdentitySucceeds() throws {
+        let entry = syntheticEntry(id: 10, pid: 1234)
+        let app = syntheticApp(name: "Example", bundleIdentifier: "com.example.app", pid: 1234)
+
+        let resolved = try WindowDirectory.resolve(
+            id: 10,
+            entries: [entry],
+            runningApps: [app],
+            identity: { _, _ in .confirmed }
+        )
+
+        XCTAssertEqual(resolved.ref, WindowRef(app: "Example", id: 10, title: "Synthetic"))
+    }
+
+    func testResolveIndeterminateIdentityIsAccepted() throws {
+        let entry = syntheticEntry(id: 10, pid: 1234)
+        let app = syntheticApp(name: "Example", bundleIdentifier: "com.example.app", pid: 1234)
+
+        // Documented guarantee: a window whose identity cannot be verified
+        // (no private mapping symbol, no AX window list, partial mapping
+        // failure) is never rejected by the identity check.
+        let resolved = try WindowDirectory.resolve(
+            id: 10,
+            entries: [entry],
+            runningApps: [app],
+            identity: { _, _ in .indeterminate }
+        )
+
+        XCTAssertEqual(resolved.ref, WindowRef(app: "Example", id: 10, title: "Synthetic"))
+    }
+
+    func testAmbiguousWindowMessageFormatIsPinned() {
+        // The explicit same-bounds ambiguity error is part of the tool
+        // contract; pin its exact format (id, count, app, recovery hint).
+        XCTAssertEqual(
+            WindowDirectory.ambiguousWindowMessage(id: 42, app: "Example", count: 2),
+            "ambiguousWindow(42): 2 windows of Example share the same bounds; "
+                + "the accessibility tree cannot be matched to this window. "
+                + "Move or resize one of them and re-observe with list_windows."
+        )
     }
 
     // MARK: - screenshot id lifecycle (pure)
@@ -1199,6 +1266,223 @@ final class WindowManagementTests: XCTestCase {
             true,
             "The main window must become the focused window again (focused: \(String(describing: focused)), expected: \(mainBounds))"
         )
+    }
+
+    // MARK: - Window identity (same bounds + closed-window ghosts)
+
+    private func axStringAttribute(_ element: AXUIElement, _ attribute: String) -> String? {
+        var value: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(element, attribute as CFString, &value) == .success, let value else {
+            return nil
+        }
+        return value as? String
+    }
+
+    private func axWindowElement(pid: pid_t, title: String) -> AXUIElement? {
+        let appElement = AXUIElementCreateApplication(pid)
+        var value: CFTypeRef?
+        guard
+            AXUIElementCopyAttributeValue(appElement, kAXWindowsAttribute as CFString, &value) == .success,
+            let windows = value as? [AXUIElement]
+        else {
+            return nil
+        }
+
+        return windows.first { element in
+            axStringAttribute(element, kAXTitleAttribute as String) == title
+        }
+    }
+
+    func testSameBoundsWindowsResolveIndependentIdentity() throws {
+        guard AXIsProcessTrusted() else {
+            throw XCTSkip("Accessibility is not trusted; skipping the same-bounds identity test")
+        }
+
+        let fixture = try requireLiveFixture()
+        defer { fixture.terminate() }
+
+        _ = try waitForFixtureState()
+        guard let mainID = fixtureWindowIDs().first else {
+            XCTFail("Expected the fixture main window")
+            return
+        }
+
+        // A second window at exactly the main window's frame with the same
+        // title: the case frame-based matching cannot disambiguate (it
+        // returns the first candidate, i.e. an arbitrary window).
+        try postFixtureCommand(
+            "open_window",
+            identifier: "fixture-second-same-bounds",
+            value: "OpenComputerUseFixture"
+        )
+        guard let twoIDs = waitForFixtureWindowCount(2) else {
+            XCTFail("Expected two same-bounds fixture windows")
+            return
+        }
+        let secondID = try XCTUnwrap(twoIDs.first { $0 != mainID })
+
+        let mainEntry = try XCTUnwrap(WindowDirectory.currentEntry(for: mainID))
+        let secondEntry = try XCTUnwrap(WindowDirectory.currentEntry(for: secondID))
+        XCTAssertTrue(
+            frameMatches(mainEntry.bounds, secondEntry.bounds),
+            "The fixture must create windows with identical bounds (got \(mainEntry.bounds) vs \(secondEntry.bounds))"
+        )
+        XCTAssertEqual(mainEntry.title, secondEntry.title, "The regression case needs identical titles")
+
+        let appElement = AXUIElementCreateApplication(fixture.pid)
+
+        if AXWindowIdentitySPI.shared.isAvailable {
+            // Identity-based matching returns the exact window for each id,
+            // verified through the accessibility identifiers the fixture
+            // sets on its windows (independent of the matching logic).
+            switch WindowDirectory.matchAXWindow(appElement: appElement, entry: mainEntry) {
+            case .matched(let window):
+                XCTAssertEqual(
+                    axStringAttribute(window, "AXIdentifier"),
+                    "fixture-window",
+                    "The main window's entry must match the main window's AX element"
+                )
+            case .ambiguous:
+                XCTFail("Same-bounds windows must not be ambiguous while the identity mapping is available")
+            case .notFound:
+                XCTFail("The main window must match its own entry")
+            }
+
+            switch WindowDirectory.matchAXWindow(appElement: appElement, entry: secondEntry) {
+            case .matched(let window):
+                XCTAssertEqual(
+                    axStringAttribute(window, "AXIdentifier"),
+                    "fixture-second-window",
+                    "The second window's entry must match the second window's AX element, not the first same-bounds candidate"
+                )
+            case .ambiguous:
+                XCTFail("Same-bounds windows must not be ambiguous while the identity mapping is available")
+            case .notFound:
+                XCTFail("The second window must match its own entry")
+            }
+        } else {
+            // Without the identity mapping, identical bounds with identical
+            // titles must be reported as ambiguous rather than guessed.
+            guard case .ambiguous = WindowDirectory.matchAXWindow(appElement: appElement, entry: mainEntry) else {
+                XCTFail("Expected .ambiguous for the main entry without the identity mapping")
+                return
+            }
+            guard case .ambiguous = WindowDirectory.matchAXWindow(appElement: appElement, entry: secondEntry) else {
+                XCTFail("Expected .ambiguous for the second entry without the identity mapping")
+                return
+            }
+        }
+    }
+
+    func testClosedWindowIsRejectedEvenWhileCGEntryLingers() throws {
+        let fixture = try requireLiveFixture()
+        defer { fixture.terminate() }
+
+        _ = try waitForFixtureState()
+        guard let mainID = fixtureWindowIDs().first else {
+            XCTFail("Expected the fixture main window")
+            return
+        }
+
+        try postFixtureCommand("open_window", identifier: "fixture-second", value: "Ghost Probe Window")
+        guard let twoIDs = waitForFixtureWindowCount(2) else {
+            XCTFail("Expected the second fixture window")
+            return
+        }
+        let secondID = try XCTUnwrap(twoIDs.first { $0 != mainID })
+
+        let dispatcher = ComputerUseToolDispatcher()
+        let staleMessage = "staleWindowHandle(\(secondID)): the window is no longer open; re-observe with list_windows."
+
+        // Baseline: the live window resolves.
+        let live = dispatcher.callToolAsResult(name: "get_window", arguments: ["window": ["id": Int(secondID)]])
+        XCTAssertFalse(live.isError, "get_window on the live window must succeed: \(live.primaryText ?? "")")
+
+        // Close the window. The CGWindow entry can linger in the full
+        // window list while the close animation runs — get_window must
+        // reject the id (AX-identity check) and must never succeed again.
+        try FixtureBridge.post(FixtureCommand(kind: "close_window", identifier: "fixture-second"))
+
+        let deadline = Date().addingTimeInterval(3)
+        var rejected = false
+        var rejectedWhileEntryLingering = false
+        while Date() < deadline {
+            let entryLingering = WindowDirectory.currentEntry(for: secondID) != nil
+            let result = dispatcher.callToolAsResult(name: "get_window", arguments: ["window": ["id": Int(secondID)]])
+            if result.isError {
+                guard (result.primaryText ?? "") == staleMessage else {
+                    XCTFail("Expected the official stale error, got: \(result.primaryText ?? "")")
+                    break
+                }
+                rejected = true
+                if entryLingering {
+                    rejectedWhileEntryLingering = true
+                }
+                break
+            }
+            // The close command is asynchronous; the window may still be
+            // open for a moment after the post.
+            Thread.sleep(forTimeInterval: 0.02)
+        }
+
+        XCTAssertTrue(rejected, "get_window on the closed window must report the official stale error")
+        // Evidence, not a hard assertion: the new behavior is the rejection
+        // while the CG entry still lingers. Kept out of the assertion so the
+        // test stays deterministic on machines where the entry purges fast
+        // or the identity mapping is unavailable (indeterminate fallback).
+        print("ghost rejected while CG entry lingering: \(rejectedWhileEntryLingering)")
+
+        // Action tools on the closed id fail with the same official error.
+        let actionTools: [(String, [String: Any])] = [
+            ("activate_window", ["window": ["id": Int(secondID)]]),
+            ("click", ["window": ["id": Int(secondID)], "element_index": "1"]),
+        ]
+        for (name, arguments) in actionTools {
+            let result = dispatcher.callToolAsResult(name: name, arguments: arguments)
+            XCTAssertTrue(result.isError, "\(name) on the closed window must fail")
+            XCTAssertEqual(result.primaryText, staleMessage, "\(name) must report the official stale error")
+        }
+    }
+
+    func testMinimizedWindowStillResolves() throws {
+        guard AXIsProcessTrusted() else {
+            throw XCTSkip("Accessibility is not trusted; skipping the minimized-window resolution test")
+        }
+
+        let fixture = try requireLiveFixture()
+        defer { fixture.terminate() }
+
+        _ = try waitForFixtureState()
+        guard let mainID = fixtureWindowIDs().first else {
+            XCTFail("Expected the fixture main window")
+            return
+        }
+
+        try postFixtureCommand("open_window", identifier: "fixture-second", value: "Minimize Probe Window")
+        guard let twoIDs = waitForFixtureWindowCount(2) else {
+            XCTFail("Expected the second fixture window")
+            return
+        }
+        let secondID = try XCTUnwrap(twoIDs.first { $0 != mainID })
+
+        // Minimize the second window through the accessibility API.
+        guard let window = axWindowElement(pid: fixture.pid, title: "Minimize Probe Window") else {
+            throw XCTSkip("The second fixture window does not expose an accessibility element")
+        }
+        guard AXUIElementSetAttributeValue(window, kAXMinimizedAttribute as CFString, kCFBooleanTrue) == .success else {
+            throw XCTSkip("The fixture window could not be minimized")
+        }
+        Thread.sleep(forTimeInterval: 0.5)
+
+        // A minimized window is still a live window: it stays in the app's
+        // accessibility window list and must resolve (no false rejection).
+        let dispatcher = ComputerUseToolDispatcher()
+        let result = dispatcher.callToolAsResult(name: "get_window", arguments: ["window": ["id": Int(secondID)]])
+        XCTAssertFalse(result.isError, "A minimized window must still resolve: \(result.primaryText ?? "")")
+
+        // Restore the window.
+        _ = AXUIElementSetAttributeValue(window, kAXMinimizedAttribute as CFString, kCFBooleanFalse)
+        Thread.sleep(forTimeInterval: 0.5)
     }
 }
 

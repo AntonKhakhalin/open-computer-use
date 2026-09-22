@@ -512,6 +512,72 @@ enum OpenComputerUseSmokeSuite {
             stale.isError && (stale.text ?? "").hasPrefix("staleWindowHandle(999999):"),
             "get_window with an unknown id must report the official stale handle error"
         )
+
+        print("W11. same-bounds windows resolve independently")
+        // A second window at exactly the main window's frame with the same
+        // title: frame-based matching cannot disambiguate this, so the ids
+        // must each resolve to their own window (identity-based matching,
+        // or an explicit ambiguity error when the mapping is unavailable).
+        try FixtureBridge.post(FixtureCommand(
+            kind: "open_window",
+            identifier: "fixture-second-same-bounds",
+            value: "Smoke Second Window"
+        ))
+        guard let sameBoundsIDs = waitForFixtureWindowCount(client: client, appName: appName, expected: 2) else {
+            throw SmokeError.message("window2 smoke: the same-bounds fixture window never appeared in list_windows")
+        }
+        let sameBoundsID = sameBoundsIDs.first(where: { $0 != mainID }) ?? sameBoundsIDs[0]
+        for id in [mainID, sameBoundsID] {
+            let ref = try client.callTool("get_window", arguments: [
+                "window": ["app": appName, "id": id],
+            ])
+            let refObject = try decodeJSONObject(ref)
+            try expect(
+                (refObject?["id"] as? Int) == id,
+                "get_window must echo each same-bounds window id (got \(ref))"
+            )
+        }
+        let sameBoundsActivation = try client.callToolResult("activate_window", arguments: [
+            "window": ["id": sameBoundsID],
+        ])
+        if sameBoundsActivation.isError {
+            let message = sameBoundsActivation.text ?? ""
+            // Without accessibility trust (or the identity mapping) the
+            // activation is either skipped or must fail with the explicit
+            // ambiguity error — never a silent wrong-window activation.
+            guard message.contains("ambiguousWindow(") || message.contains("Accessibility") || message.contains("could not be brought to the foreground") else {
+                throw SmokeError.message("same-bounds activate_window failed unexpectedly: \(message)")
+            }
+            print("W11. same-bounds activation reported: \(message)")
+        }
+
+        print("W12. closed window ids are rejected as stale")
+        try FixtureBridge.post(FixtureCommand(
+            kind: "close_window",
+            identifier: "fixture-second",
+        ))
+        let closedStaleMessage = "staleWindowHandle(\(sameBoundsID)): the window is no longer open; re-observe with list_windows."
+        let closedDeadline = Date().addingTimeInterval(5)
+        var closedRejected = false
+        while Date() < closedDeadline {
+            let result = try client.callToolResult("get_window", arguments: [
+                "window": ["id": sameBoundsID],
+            ])
+            if result.isError {
+                if (result.text ?? "") == closedStaleMessage {
+                    closedRejected = true
+                    break
+                }
+                // Any other error is a smoke failure; surface it.
+                throw SmokeError.message("window2 smoke: unexpected error for the closed window: \(result.text ?? "")")
+            }
+            // The close command is asynchronous; poll until it lands.
+            Thread.sleep(forTimeInterval: 0.05)
+        }
+        try expect(
+            closedRejected,
+            "get_window on the closed window must report the official stale handle error"
+        )
     }
 
     private static func decodeJSONObject(_ text: String) throws -> [String: Any]? {
