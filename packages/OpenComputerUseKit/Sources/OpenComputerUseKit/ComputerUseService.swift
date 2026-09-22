@@ -387,6 +387,14 @@ func canUseKeyboardTextFallback(role: String?, roleDescription: String?, isValue
         || roleDescription.contains("text entry")
 }
 
+/// type_text settable gate: an AX query error means "unknown", which is
+/// treated as not settable so the keyboard fallback chain still runs —
+/// unlike `setValueAttributeIsSettable`, which hard-fails so the
+/// `set_value` tool surfaces broken AX state instead of writing through it.
+func typeTextValueIsSettable(result: AXError, settable: Bool) -> Bool {
+    result == .success && settable
+}
+
 func isElectronScopedWebRowClickOptimizationTarget(appName: String, bundleIdentifier: String?) -> Bool {
     let normalizedBundleIdentifier = bundleIdentifier?
         .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1327,7 +1335,7 @@ public final class ComputerUseService {
             return
         }
 
-        guard try canTypeTextUsingKeyboardFallback(in: snapshot) else {
+        guard canTypeTextUsingKeyboardFallback(in: snapshot) else {
             throw ComputerUseError.stateUnavailable("type_text requires a focused editable text element. Click a text entry area first, or use set_value on a settable text element.")
         }
 
@@ -1768,6 +1776,15 @@ public final class ComputerUseService {
         )
     }
 
+    /// type_text-only settable check: AX query errors (such as -25205) are
+    /// treated as "not verified settable" so the keyboard fallback chain
+    /// still runs instead of surfacing a raw AX error.
+    private func isValueSettableForTypeText(_ element: AXUIElement) -> Bool {
+        var settable = DarwinBoolean(false)
+        let result = AXUIElementIsAttributeSettable(element, kAXValueAttribute as CFString, &settable)
+        return typeTextValueIsSettable(result: result, settable: settable.boolValue)
+    }
+
     private func bestElement(containing point: CGPoint, in snapshot: AppSnapshot) -> ElementRecord? {
         snapshot.elements.values
             .filter { $0.localFrame?.contains(point) ?? false }
@@ -2030,7 +2047,7 @@ public final class ComputerUseService {
             return false
         }
 
-        guard try isSettableForSetValue(element: element, attribute: kAXValueAttribute) else {
+        guard isValueSettableForTypeText(element) else {
             return false
         }
 
@@ -2046,7 +2063,7 @@ public final class ComputerUseService {
         }
     }
 
-    private func canTypeTextUsingKeyboardFallback(in snapshot: AppSnapshot) throws -> Bool {
+    private func canTypeTextUsingKeyboardFallback(in snapshot: AppSnapshot) -> Bool {
         guard let element = snapshot.focusedElement else {
             return false
         }
@@ -2058,7 +2075,7 @@ public final class ComputerUseService {
         return canUseKeyboardTextFallback(
             role: role,
             roleDescription: roleDescription,
-            isValueSettable: try isSettableForSetValue(element: element, attribute: kAXValueAttribute)
+            isValueSettable: isValueSettableForTypeText(element)
         )
     }
 
