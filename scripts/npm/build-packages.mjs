@@ -232,6 +232,7 @@ const installCommands = new Map([
   ["install-opencode-mcp", "install-opencode-mcp.sh"],
   ["install-cursor-mcp", "install-cursor-mcp.sh"],
   ["install-codex-plugin", "install-codex-plugin.sh"],
+  ["setup", "install-setup.sh"],
 ]);
 
 function printLauncherHelp() {
@@ -255,6 +256,8 @@ Commands:
   install-opencode-mcp Install the MCP server into ~/.config/opencode.
   install-cursor-mcp   Install the MCP server into Cursor config (~/.cursor/mcp.json).
   install-codex-plugin Install this npm package into the local Codex plugin cache.
+  setup                Detect installed agents (codex/claude/opencode/gemini/cursor)
+                       and run the matching MCP installers. Flags: --dry-run --all --agents a,b
   help [command]       Show general or command-specific help.
   version              Print the CLI version.
 
@@ -371,6 +374,11 @@ if (command === "help" && args[1] === "install-cursor-mcp") {
 
 if (command === "help" && (args[1] === "install-claude-mcp" || args[1] === "install-clauce-mcp")) {
   printInstallHelp("install-claude-mcp.sh", "open-computer-use install-claude-mcp");
+  process.exit(0);
+}
+
+if (command === "help" && args[1] === "setup") {
+  printInstallHelp("install-setup.sh", "open-computer-use setup [--dry-run] [--all] [--agents codex,claude,opencode,gemini,cursor]");
   process.exit(0);
 }
 
@@ -550,6 +558,7 @@ function renderMetaPackageJson(packageName, version) {
       "scripts/install-opencode-mcp.sh",
       "scripts/install-cursor-mcp.sh",
       "scripts/install-codex-plugin.sh",
+      "scripts/install-setup.sh",
       "scripts/postinstall.mjs",
       "README.md",
       "LICENSE",
@@ -565,6 +574,7 @@ function copyInstallerScripts(packageRoot) {
   cpSync(path.join(repoRoot, "scripts", "install-opencode-mcp.sh"), path.join(packageRoot, "scripts", "install-opencode-mcp.sh"));
   cpSync(path.join(repoRoot, "scripts", "install-cursor-mcp.sh"), path.join(packageRoot, "scripts", "install-cursor-mcp.sh"));
   cpSync(path.join(repoRoot, "scripts", "install-codex-plugin.sh"), path.join(packageRoot, "scripts", "install-codex-plugin.sh"));
+  cpSync(path.join(repoRoot, "scripts", "install-setup.sh"), path.join(packageRoot, "scripts", "install-setup.sh"));
 
   for (const scriptName of [
     "install-claude-mcp.sh",
@@ -573,6 +583,7 @@ function copyInstallerScripts(packageRoot) {
     "install-opencode-mcp.sh",
     "install-cursor-mcp.sh",
     "install-codex-plugin.sh",
+    "install-setup.sh",
   ]) {
     chmodSync(path.join(packageRoot, "scripts", scriptName), 0o755);
   }
