@@ -689,6 +689,7 @@ final class WindowManagementTests: XCTestCase {
     }
 
     private func requireLiveFixture() throws -> FixtureHandle {
+        requireLiveTestEnvironment("spawns a GUI fixture app and drives real windows")
         guard !NSScreen.screens.isEmpty else {
             throw XCTSkip("No GUI session available for the live window management tests")
         }
@@ -1479,6 +1480,80 @@ final class WindowManagementTests: XCTestCase {
         let dispatcher = ComputerUseToolDispatcher()
         let result = dispatcher.callToolAsResult(name: "get_window", arguments: ["window": ["id": Int(secondID)]])
         XCTAssertFalse(result.isError, "A minimized window must still resolve: \(result.primaryText ?? "")")
+
+        // Restore the window.
+        _ = AXUIElementSetAttributeValue(window, kAXMinimizedAttribute as CFString, kCFBooleanFalse)
+        Thread.sleep(forTimeInterval: 0.5)
+    }
+
+    func testMinimizedWindowAppearsInListWindowsExactlyOnce() throws {
+        guard AXIsProcessTrusted() else {
+            throw XCTSkip("Accessibility is not trusted; skipping the minimized-window listing test")
+        }
+        guard AXWindowIdentitySPI.shared.isAvailable else {
+            throw XCTSkip("The identity mapping is unavailable; minimized-window discovery degrades to on-screen-only listing")
+        }
+
+        let fixture = try requireLiveFixture()
+        defer { fixture.terminate() }
+
+        _ = try waitForFixtureState()
+        guard let mainID = fixtureWindowIDs().first else {
+            XCTFail("Expected the fixture main window")
+            return
+        }
+
+        try postFixtureCommand("open_window", identifier: "fixture-second", value: "Minimize Listing Probe")
+        guard let twoIDs = waitForFixtureWindowCount(2) else {
+            XCTFail("Expected two fixture windows for the minimized-window listing test")
+            return
+        }
+        let secondID = try XCTUnwrap(twoIDs.first { $0 != mainID })
+
+        guard let window = axWindowElement(pid: fixture.pid, title: "Minimize Listing Probe") else {
+            throw XCTSkip("The second fixture window does not expose an accessibility element")
+        }
+        guard AXUIElementSetAttributeValue(window, kAXMinimizedAttribute as CFString, kCFBooleanTrue) == .success else {
+            throw XCTSkip("The fixture window could not be minimized")
+        }
+
+        // First wait until the minimize animation completes: the window must
+        // leave the on-screen enumeration. Otherwise a passing assertion
+        // could be satisfied by the on-screen path alone.
+        let onScreenDeadline = Date().addingTimeInterval(10)
+        var leftOnScreen = false
+        while Date() < onScreenDeadline {
+            let onScreenIDs = WindowDirectory.listEntries(onScreenOnly: true)
+                .filter { $0.ownerPID == fixture.pid }
+                .map(\.windowID)
+            if !onScreenIDs.contains(secondID) {
+                leftOnScreen = true
+                break
+            }
+            Thread.sleep(forTimeInterval: 0.2)
+        }
+        guard leftOnScreen else {
+            return XCTSkip("The minimized window never left the on-screen list in time; cannot isolate the discovery path")
+        }
+
+        // Now the window is only reachable through minimized-window
+        // discovery: it must be reported, and exactly once (no duplicates),
+        // while the on-screen enumeration is unchanged.
+        let discoveryDeadline = Date().addingTimeInterval(10)
+        var listedExactlyOnce = false
+        while Date() < discoveryDeadline {
+            let ids = WindowDirectory.listWindows()
+                .filter { $0.app == FixtureBridge.appName }
+                .map(\.id)
+            if ids.contains(secondID) {
+                XCTAssertEqual(ids.filter { $0 == secondID }.count, 1, "A minimized window must be listed exactly once")
+                XCTAssertTrue(ids.contains(mainID), "The on-screen enumeration must be unchanged")
+                listedExactlyOnce = true
+                break
+            }
+            Thread.sleep(forTimeInterval: 0.2)
+        }
+        XCTAssertTrue(listedExactlyOnce, "A live minimized fixture window must appear in list_windows")
 
         // Restore the window.
         _ = AXUIElementSetAttributeValue(window, kAXMinimizedAttribute as CFString, kCFBooleanFalse)

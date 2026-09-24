@@ -75,6 +75,7 @@ final class LaunchAppTests: XCTestCase {
     // MARK: Real launch (requires a GUI session)
 
     func testLaunchAppByBundleIdentifierThenReusesInstanceByName() throws {
+        requireLiveTestEnvironment("launches Calculator and drives its windows")
         guard !NSScreen.screens.isEmpty else {
             throw XCTSkip("No GUI session available for the live launch_app test")
         }

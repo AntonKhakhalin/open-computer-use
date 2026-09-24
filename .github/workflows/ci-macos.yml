@@ -1,0 +1,37 @@
+name: ci-macos
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  ci-macos:
+    # Versioned GitHub-hosted macOS runner (same as release.yml): stable
+    # label, Xcode + Swift toolchain preinstalled. The job builds the Swift
+    # package, runs the unit test suite (live/permission-dependent tests are
+    # gated behind OCU_RUN_LIVE_TESTS and skip by default), and assembles the
+    # macOS app bundle with the release packaging script.
+    runs-on: macos-26
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: "24"
+
+      - name: Set up Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c
+        with:
+          go-version: "1.25.x"
+
+      - name: Run macOS CI checks
+        shell: bash
+        run: ./scripts/ci-macos.sh

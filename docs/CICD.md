@@ -9,6 +9,22 @@
 - `scripts/build-open-computer-use-windows.sh`：本地构建实验性 Windows `open-computer-use.exe`，支持 `arm64` / `amd64`；release package 会把这两个产物内置进既有 npm 包的 `dist/windows/`。
 - `.github/workflows/release.yml`：支持 push semver tag 自动发布，也支持手动触发；tag push 时会跑 npm release 打包逻辑并发布 npm 包。`Open Computer Use` 的 npm 产物默认走 ad-hoc signing；如果配置了 `OPEN_COMPUTER_USE_CODESIGN_*` secrets，则会先导入 `Developer ID Application` 证书，再按同一 identity 对 release `.app` 统一签名。
 
+## macOS CI（`ci-macos.yml`）
+
+- `.github/workflows/ci-macos.yml`：push 到 `main` 与所有 PR 触发，跑在 **`macos-26`**（带版本号的 GitHub-hosted macOS runner，与 `release.yml` 相同标签——稳定、预装 Xcode + Swift 工具链）。action 全部 pin 到 commit SHA。
+- `scripts/ci-macos.sh` 依次执行：
+  1. 脚本卫生检查（所有 `scripts/*.sh` 过 `bash -n`、所有 `scripts/*.mjs` 过 `node --check`）；
+  2. `swift build` —— 完整编译 Swift package（Kit + app + fixture）；
+  3. `swift test` —— 单元测试：所有**纯测试**都跑；依赖真实 GUI / 权限的 **live 测试**由 `OCU_RUN_LIVE_TESTS` 门控（默认关），CI 中默认 skip，因此 CI 绝不会拉起 GUI 应用、也不会卡在 TCC 授权弹窗上；
+  4. `scripts/build-open-computer-use-app.sh debug` —— 校验 macOS app bundle 打包链路（Info.plist、iconset、ad-hoc codesign 路径）；
+  5. `go vet` + `go build` —— release tooling（平台无关）。
+
+**CI 里跑不了的测试（按任务要求显式记录）：**
+
+- live fixture 测试（`WindowManagementTests` 的 "Live fixture tests" / "Window identity" 段，以及最小化窗口列出的 live 测试）：需要真实 GUI 会话，且多数断言需要测试进程被授予 Accessibility；CI runner 没有 TCC 授权，弹窗会挂死构建。本地运行：`OCU_RUN_LIVE_TESTS=1 swift test`。
+- SkyClick live 测试：额外依赖 SkyLight SPI 与一个运行中的 Chrome 实例（`OPEN_COMPUTER_USE_RUN_SKY_CLICK_LIVE_TEST=1`）。
+- `launch_app` live 测试：会启动 Calculator（`OCU_RUN_LIVE_TESTS=1`）。
+
 ## 设计原则
 
 这套默认流水线的目标，是在项目真正成形前先把交付链路搭起来，而不是假装已经知道未来项目该怎么 build 和 deploy。
