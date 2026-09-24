@@ -4,7 +4,7 @@
   "plugins": [
     {
       "name": "open-computer-use",
-      "version": "1.0.4",
+      "version": "1.0.5",
       "description": "Open-source Computer Use MCP server and skill (fork of opensymph/open-computer-use): control desktop apps on macOS, Linux, and Windows from AI agents via accessibility-first automation, with native macOS window management (window2) in this fork.",
       "source": "./plugins/open-computer-use",
       "author": {
