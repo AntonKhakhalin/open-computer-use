@@ -21,8 +21,11 @@ const repoRoot = path.resolve(__dirname, "..", "..");
 const defaultOutDir = path.join(repoRoot, "dist", "npm");
 const appBundleName = "Open Computer Use.app";
 const appExecutableName = "OpenComputerUse";
+const forkPackageName = "@antonkhakhalin/open-computer-use";
+const forkRepositoryUrl = "https://github.com/AntonKhakhalin/open-computer-use";
+const mcpRegistryName = "io.github.AntonKhakhalin/open-computer-use";
 const metaPackageNames = [
-  "@opensymph/open-computer-use",
+  forkPackageName,
 ];
 const runtimeTargets = [
   {
@@ -227,6 +230,7 @@ const installCommands = new Map([
   ["install-gemini-mcp", "install-gemini-mcp.sh"],
   ["install-codex-mcp", "install-codex-mcp.sh"],
   ["install-opencode-mcp", "install-opencode-mcp.sh"],
+  ["install-cursor-mcp", "install-cursor-mcp.sh"],
   ["install-codex-plugin", "install-codex-plugin.sh"],
 ]);
 
@@ -249,6 +253,7 @@ Commands:
   install-gemini-mcp   Install the MCP server into Gemini CLI config.
   install-codex-mcp    Install the MCP server into ~/.codex/config.toml.
   install-opencode-mcp Install the MCP server into ~/.config/opencode.
+  install-cursor-mcp   Install the MCP server into Cursor config (~/.cursor/mcp.json).
   install-codex-plugin Install this npm package into the local Codex plugin cache.
   help [command]       Show general or command-specific help.
   version              Print the CLI version.
@@ -328,7 +333,7 @@ function resolveNativeExecutable() {
     fail(\`Missing bundled native runtime for \${platformKey} at \${executablePath}.
 
 Reinstall with:
-  npm install -g open-computer-use\`);
+  npm install -g ${forkPackageName}\`);
   }
 
   return executablePath;
@@ -356,6 +361,11 @@ if (command === "help" && args[1] === "install-gemini-mcp") {
 
 if (command === "help" && args[1] === "install-opencode-mcp") {
   printInstallHelp("install-opencode-mcp.sh", "open-computer-use install-opencode-mcp");
+  process.exit(0);
+}
+
+if (command === "help" && args[1] === "install-cursor-mcp") {
+  printInstallHelp("install-cursor-mcp.sh", "open-computer-use install-cursor-mcp [--scope project|user]");
   process.exit(0);
 }
 
@@ -408,7 +418,7 @@ for (const line of lines) {
 function renderReadme(packageName, version) {
   return `# ${packageName}
 
-Cross-platform npm distribution for the open-source **Open Computer Use** MCP server.
+Cross-platform npm distribution for the **Open Computer Use** MCP server — AntonKhakhalin fork of [opensymph/open-computer-use](https://github.com/opensymph/open-computer-use), with native macOS window management added on top of the upstream tool surface.
 
 This package bundles native runtimes for these supported platforms and lets the Node launcher choose the current \`process.platform\` / \`process.arch\` pair:
 
@@ -474,7 +484,12 @@ open-computer-use install-codex-plugin
 - Linux requires a signed-in desktop session with AT-SPI2 / D-Bus accessibility available for real app control.
 - Windows requires a signed-in desktop session for UI Automation access.
 
-Source repository: https://github.com/opensymph/open-computer-use
+## Fork note
+
+This is the **AntonKhakhalin fork** of [opensymph/open-computer-use](https://github.com/opensymph/open-computer-use): it adds native macOS window management (window2 tools, exact CGWindowID targeting) on top of the upstream tool surface. The original project and core implementation belong to upstream. If you want the upstream stable release, install \`@opensymph/open-computer-use\` instead.
+
+Fork repository: ${forkRepositoryUrl}
+Upstream repository: https://github.com/opensymph/open-computer-use
 `;
 }
 
@@ -495,17 +510,18 @@ function renderMetaPackageJson(packageName, version) {
   return {
     name: packageName,
     version,
-    description: "Cross-platform Computer Use MCP server launcher. After install, configure open-computer-use mcp.",
+    description: "Cross-platform Computer Use MCP server launcher (AntonKhakhalin fork with native macOS window management). After install, configure open-computer-use mcp.",
     license: "MIT",
-    homepage: "https://github.com/opensymph/open-computer-use",
+    homepage: forkRepositoryUrl,
     repository: {
       type: "git",
-      url: "git+https://github.com/opensymph/open-computer-use.git",
+      url: `git+${forkRepositoryUrl}.git`,
     },
     bugs: {
-      url: "https://github.com/opensymph/open-computer-use/issues",
+      url: `${forkRepositoryUrl}/issues`,
     },
-    keywords: packageKeywords(),
+    mcpName: mcpRegistryName,
+    keywords: packageKeywords(["open-computer-use-fork", "computer-use-fork", "claude-code", "gemini-cli", "cursor"]),
     preferGlobal: true,
     publishConfig: {
       access: "public",
@@ -532,6 +548,7 @@ function renderMetaPackageJson(packageName, version) {
       "scripts/install-config-helper.mjs",
       "scripts/install-codex-mcp.sh",
       "scripts/install-opencode-mcp.sh",
+      "scripts/install-cursor-mcp.sh",
       "scripts/install-codex-plugin.sh",
       "scripts/postinstall.mjs",
       "README.md",
@@ -546,6 +563,7 @@ function copyInstallerScripts(packageRoot) {
   cpSync(path.join(repoRoot, "scripts", "install-config-helper.mjs"), path.join(packageRoot, "scripts", "install-config-helper.mjs"));
   cpSync(path.join(repoRoot, "scripts", "install-codex-mcp.sh"), path.join(packageRoot, "scripts", "install-codex-mcp.sh"));
   cpSync(path.join(repoRoot, "scripts", "install-opencode-mcp.sh"), path.join(packageRoot, "scripts", "install-opencode-mcp.sh"));
+  cpSync(path.join(repoRoot, "scripts", "install-cursor-mcp.sh"), path.join(packageRoot, "scripts", "install-cursor-mcp.sh"));
   cpSync(path.join(repoRoot, "scripts", "install-codex-plugin.sh"), path.join(packageRoot, "scripts", "install-codex-plugin.sh"));
 
   for (const scriptName of [
@@ -553,6 +571,7 @@ function copyInstallerScripts(packageRoot) {
     "install-gemini-mcp.sh",
     "install-codex-mcp.sh",
     "install-opencode-mcp.sh",
+    "install-cursor-mcp.sh",
     "install-codex-plugin.sh",
   ]) {
     chmodSync(path.join(packageRoot, "scripts", scriptName), 0o755);

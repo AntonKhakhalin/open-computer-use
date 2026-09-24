@@ -14,6 +14,7 @@ function usage() {
   node ./scripts/install-config-helper.mjs codex-mcp <config-path> <server-name> <command-name>
   node ./scripts/install-config-helper.mjs gemini-mcp <config-path> <server-name> <command-name>
   node ./scripts/install-config-helper.mjs opencode-mcp <primary-config-path> <secondary-config-path> <server-name> <command-name>
+  node ./scripts/install-config-helper.mjs cursor-mcp <config-path> <server-name> <command-name>
   node ./scripts/install-config-helper.mjs codex-plugin-version <plugin-manifest-path>
   node ./scripts/install-config-helper.mjs codex-plugin-config <config-path> <repo-root> <marketplace-name> <plugin-name>
   node ./scripts/install-config-helper.mjs copy-into-dir <target-dir> <source-path> [<source-path> ...]
@@ -271,6 +272,33 @@ function installGeminiMcp(configPath, serverName, commandName) {
   process.stdout.write(`Installed Gemini MCP server "${serverName}" into ${configPath}.\n`);
 }
 
+function installCursorMcp(configPath, serverName, commandName) {
+  const desiredEntry = {
+    command: commandName,
+    args: ["mcp"],
+  };
+  const data = readJSONObjectConfig(configPath, `Cursor config ${configPath}`);
+  const mcpServers = ensureObjectField(
+    data,
+    "mcpServers",
+    `Existing Cursor config has non-object "mcpServers"; refusing to modify it.`,
+  );
+
+  const target = mcpServers[serverName];
+  const targetMatches = JSON.stringify(target) === JSON.stringify(desiredEntry);
+
+  if (targetMatches) {
+    process.stdout.write(`Cursor MCP server "${serverName}" is already installed in ${configPath}.\n`);
+    return;
+  }
+
+  mcpServers[serverName] = desiredEntry;
+
+  writeJSONConfig(configPath, data);
+
+  process.stdout.write(`Installed Cursor MCP server "${serverName}" into ${configPath}.\n`);
+}
+
 function installOpencodeMcp(primaryConfigPath, secondaryConfigPath, serverName, commandName) {
   const desiredEntry = {
     type: "local",
@@ -467,6 +495,13 @@ function main(argv) {
         process.exit(1);
       }
       installOpencodeMcp(...args);
+      return;
+    case "cursor-mcp":
+      if (args.length !== 3) {
+        usage();
+        process.exit(1);
+      }
+      installCursorMcp(...args);
       return;
     case "codex-plugin-version":
       if (args.length !== 1) {

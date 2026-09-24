@@ -5,7 +5,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const repositoryURL = "https://github.com/opensymph/open-computer-use";
+// Fork release notes: changelog links point at this fork, where the fork tags live.
+const repositoryURL = "https://github.com/AntonKhakhalin/open-computer-use";
 const tagPattern = /^v?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)$/;
 const cjkPattern = /[\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF]/u;
 
