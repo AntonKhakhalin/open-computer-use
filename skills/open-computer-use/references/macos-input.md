@@ -28,7 +28,7 @@ All findings below were characterized on a macOS 27 dev machine in controlled re
 
 - These work without activation (no focus steal): element clicks, `set_value`, `type_text` (AX path), `perform_secondary_action` (`AXPress`), and app-targeted `press_key` (subject to the activity condition above).
 - `activate_window` / any activation is visible to the user; use it only when the task requires the foreground, and return focus to the user's app when done.
-- Minimized windows still resolve, observe, and accept `set_value`; key-event input was not characterized for minimized windows — restore to visible before relying on it.
+- Minimized windows are included in `list_windows` on macOS (when the private window-identity capability is available — `ocu doctor` reports it), so they can be discovered and targeted by `window_id` without restoring them first. Minimized windows still resolve, observe, and accept `set_value`; key-event input was not characterized for minimized windows — restore to visible before relying on it.
 
 ## Creating a Window in the Background Without a Visible Pop-Up
 

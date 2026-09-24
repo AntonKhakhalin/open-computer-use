@@ -2,18 +2,29 @@
   <img src="./assets/logo/open-computer-use-256.png" width="144" alt="open-computer-use">
 </p>
 
-# open-computer-use
-
-**Open Computer Use — Enhanced macOS Window Control**
+# Open Computer Use — Enhanced macOS Window Control
 
 [![Release](https://img.shields.io/github/v/release/AntonKhakhalin/open-computer-use?label=fork%20release)](https://github.com/AntonKhakhalin/open-computer-use/releases)
 [![Fork of opensymph/open-computer-use](https://img.shields.io/badge/fork%20of-opensymph%2Fopen--computer--use-0E7490)](https://github.com/opensymph/open-computer-use)
 [![License: MIT](https://img.shields.io/badge/License-MIT-informational)](./LICENSE)
 [![简体中文](https://img.shields.io/badge/简体中文-点击查看-orange)](./README.zh-CN.md)
 
-Local Computer Use for Codex, Claude Code, OpenCode, Gemini, Cursor, and other MCP-capable AI agents. A local MCP server that gives agents eyes and hands on your desktop — see an app's interface, click, type, scroll, and drag, through the accessibility layer, without taking over your real mouse and keyboard. Runs entirely on your machine, on macOS, Windows, and Linux.
+Local computer use for Codex, Claude Code, OpenCode, Gemini, Cursor, and other MCP-capable agents: a local MCP server that gives agents eyes and hands on your desktop — see an app's interface, click, type, scroll, and drag through the accessibility layer, without taking over your real mouse and keyboard. Runs entirely on your machine, on macOS, Windows, and Linux.
 
-Advanced macOS support includes exact-window targeting, background/minimized-window observation, native app launching, and window-targeted actions.
+**Install:** [one command](#quick-install) · **Short link:** [`github.com/AntonKhakhalin/ocu`](https://github.com/AntonKhakhalin/ocu) · Fork of [opensymph/open-computer-use](https://github.com/opensymph/open-computer-use)
+
+```bash
+npm i -g https://github.com/AntonKhakhalin/open-computer-use/releases/download/v1.2.1-anton.1/antonkhakhalin-open-computer-use-1.2.1-anton.1.tgz
+```
+
+**What this fork adds on macOS** (everything else is upstream, unchanged):
+
+- **Exact window targeting** — every window is a real CGWindowID; same-bounds windows resolve by identity, never by "first match".
+- **Background window observation** — read a specific window's accessibility tree without activation or focus stealing.
+- **Minimized-window observation** — minimized windows stay discoverable in `list_windows`, resolvable, and observable; value writes work while minimized.
+- **Native `launch_app`** — background launch (no focus steal), instance reuse, returns `pid` + `windows[]`.
+- **Window-specific screenshots** — `get_window_state` captures the targeted window itself, with `screenshotId`-gated coordinate actions.
+- **Background-first AX interaction** — the accessibility API is preferred over synthetic input wherever a reliable operation exists.
 
 > [!NOTE]
 > **This repository is a fork of [opensymph/open-computer-use](https://github.com/opensymph/open-computer-use).**
@@ -54,6 +65,14 @@ Everything else — the nine core tools, the 14-tool MCP surface, the three-plat
 
 Installers are idempotent: they detect existing configuration, preserve unrelated MCP servers and settings, and report exactly what they wrote.
 
+Prefer one command for everything? `ocu setup` detects which agents are present (Codex, Claude Code, OpenCode, Gemini, Cursor), configures only the ones it finds, and never overwrites existing entries:
+
+```bash
+ocu setup                # configure every detected agent
+ocu setup --dry-run      # show what would change
+ocu setup --agents codex,claude
+```
+
 ## Quick install
 
 Simplest working route — the fork's npm tarball from [GitHub Releases](https://github.com/AntonKhakhalin/open-computer-use/releases):
@@ -79,6 +98,9 @@ macOS 14+ needs `Accessibility` and `Screen Recording` granted once. Windows and
 ## Connect your agent
 
 ```bash
+ocu setup                  # auto-detect all installed agents and configure them in one pass
+
+# or configure one agent explicitly:
 ocu install-codex-mcp      # Codex CLI & Codex App
 ocu install-codex-plugin   # Codex App, plugin form
 ocu install-claude-mcp     # Claude Code
@@ -157,11 +179,11 @@ This is a **local stdio** server: it runs on your machine, no remote/network end
 - Window-specific screenshots — `get_window_state` captures the targeted window itself, with `screenshotId`-gated coordinate actions (stale ids rejected).
 - Same-bounds window identity — windows with identical frames resolve by AX identity, never by "first match"; closed/ghost windows are rejected, not echoed as live.
 - Native app launching — `launch_app` starts apps in the background (no focus steal), reuses running instances, and returns `pid` + `windows[]`.
-- Minimized windows — resolvable and observable; `set_value` works on them.
+- Minimized windows — discoverable in `list_windows`, resolvable and observable; `set_value` works on them.
 
 **Known limitations:**
 
-- Minimized windows: restore to visible before relying on key-event input (value writes still work).
+- Minimized windows: discovery depends on a private macOS window-identity capability — when it is unavailable, `list_windows` lists on-screen windows only (check the capability line in `ocu doctor`). Restore to visible before relying on key-event input (value writes still work while minimized).
 - Plain unmodified `press_key` events are dropped while the user is actively typing (delivered when input is quiet); prefer `type_text` / AX paths — see [the skill reference](./skills/open-computer-use/references/macos-input.md).
 - Window titles in `list_windows` require Screen Recording permission; ids still work without it.
 - Linux window2 tools return an explicit "not supported yet" error.
@@ -240,6 +262,7 @@ These commands are CLI-only and never touch the official 14-tool MCP surface.
 
 ## Upstream relationship
 
+- **Short link:** [github.com/AntonKhakhalin/ocu](https://github.com/AntonKhakhalin/ocu) — alias repository for this project (README + install pointer only).
 - **Upstream project:** [opensymph/open-computer-use](https://github.com/opensymph/open-computer-use) — original architecture and core implementation.
 - **Forked work proposed upstream:** [PR #2 — native macOS `launch_app`](https://github.com/opensymph/open-computer-use/pull/2) (branch `feat/macos-launch-app`), [PR #3 — native macOS window management and window-targeted actions](https://github.com/opensymph/open-computer-use/pull/3) (branch `feat/macos-window-management`).
 - **Fork-only:** this repository's `feat/public-distribution` branch (branding, fork packaging, installers, release artifacts).

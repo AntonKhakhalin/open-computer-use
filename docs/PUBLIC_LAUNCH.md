@@ -13,6 +13,11 @@ Native desktop computer use for AI agents, with advanced macOS window targeting.
 Local Computer Use for Codex, Claude Code, OpenCode, Gemini, Cursor, and other MCP-capable
 AI agents — a fork of opensymph/open-computer-use with native macOS window management.
 
+## Short link
+
+<https://github.com/AntonKhakhalin/ocu> — alias repository for this project
+(README + install pointer only; no code).
+
 ## 3-sentence announcement
 
 Open Computer Use gives AI agents eyes and hands on your desktop: a local MCP server that
@@ -52,6 +57,8 @@ This fork builds on that foundation and focuses on **window-level precision on m
   happens to match first.
 - `launch_app` starts macOS apps in the background (no focus steal), reuses running
   instances, and returns the `pid` and `windows[]`.
+- Minimized windows are discoverable in `list_windows`, resolvable, and observable
+  (when the private macOS window-identity capability is available; `ocu doctor` reports it).
 - Windows with identical frames are resolved by AX identity, never by "first match";
   closed/ghost windows are rejected instead of being echoed as live.
 
@@ -77,7 +84,7 @@ is implied. If you want the upstream stable release, use
 - Native macOS window management: `list_windows`, `get_window`, `get_window_state`, `activate_window`, `launch_app`
 - Exact CGWindowID window identity; same-bounds disambiguation; closed/ghost-window rejection
 - Window-targeted actions with `screenshotId` observation gating on macOS and Windows
-- Background and minimized-window observation without stealing focus
+- Background and minimized-window observation without stealing focus (minimized windows are discoverable in `list_windows` when the private window-identity capability is available)
 - Password-manager deny list; global input gated behind explicit opt-in env vars (default off)
 - Installable agent skill (`skills` CLI) + per-agent MCP installers, all idempotent
 - Display-level desktop commands (`screenshot`, `cursor-position`, `record ...`) on all three platforms
@@ -86,6 +93,7 @@ is implied. If you want the upstream stable release, use
 
 Verified install paths:
 
+- **All detected agents at once** — `ocu setup` (non-interactive, idempotent, never overwrites existing entries)
 - **Codex CLI & Codex App** — `ocu install-codex-mcp` / `ocu install-codex-plugin`
 - **Claude Code** — `ocu install-claude-mcp`
 - **OpenCode** — `ocu install-opencode-mcp`
@@ -104,7 +112,10 @@ npm i -g https://github.com/AntonKhakhalin/open-computer-use/releases/download/v
 ocu doctor
 ocu call list_apps
 
-# Connect your agent (pick one)
+# Connect your agent
+# One pass for every agent installed on this machine (non-interactive, idempotent):
+ocu setup
+# ...or configure one agent explicitly:
 ocu install-codex-mcp
 ocu install-claude-mcp
 ocu install-gemini-mcp
@@ -148,7 +159,9 @@ or endorsement by upstream maintainers.
 - Fork release artifacts are ad-hoc signed (no Developer ID / notarization); macOS TCC
   grants are tied to the exact binary, so re-grant via `ocu doctor` after replacing it.
 - Minimized windows are observable and accept value writes, but restore them to visible
-  before relying on key-event input.
+  before relying on key-event input. Their discovery in `list_windows` depends on a private
+  macOS window-identity capability; when it is unavailable, `list_windows` lists on-screen
+  windows only (check the capability line in `ocu doctor`).
 - Unmodified `press_key` events are dropped while the user is actively typing on macOS
   (delivered when input is quiet); prefer `type_text` / AX paths — see the skill reference
   `macos-input.md`.

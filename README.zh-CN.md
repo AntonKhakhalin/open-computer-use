@@ -2,18 +2,29 @@
   <img src="./assets/logo/open-computer-use-256.png" width="144" alt="open-computer-use">
 </p>
 
-# open-computer-use
-
-**Open Computer Use — 增强版 macOS 窗口控制**
+# Open Computer Use — 增强版 macOS 窗口控制
 
 [![Release](https://img.shields.io/github/v/release/AntonKhakhalin/open-computer-use?label=fork%20release)](https://github.com/AntonKhakhalin/open-computer-use/releases)
 [![Fork of opensymph/open-computer-use](https://img.shields.io/badge/fork%20of-opensymph%2Fopen--computer--use-0E7490)](https://github.com/opensymph/open-computer-use)
 [![License: MIT](https://img.shields.io/badge/License-MIT-informational)](./LICENSE)
 [![English](https://img.shields.io/badge/English-Click-yellow)](./README.md)
 
-面向 Codex、Claude Code、OpenCode、Gemini、Cursor 及其他支持 MCP 的 AI Agent 的本地 Computer Use。一个本地 MCP 服务器，给 Agent 一双看得见桌面、摸得着应用的手——读取应用界面、点击、输入、滚动、拖拽，全部通过无障碍层完成，不抢占你真实的鼠标和键盘。完全本地运行，支持 macOS、Windows 和 Linux。
+面向 Codex、Claude Code、OpenCode、Gemini、Cursor 及其他支持 MCP 的 AI Agent 的本地 Computer Use：一个本地 MCP 服务器，给 Agent 一双看得见桌面、摸得着应用的手——读取应用界面、点击、输入、滚动、拖拽，全部通过无障碍层完成，不抢占你真实的鼠标和键盘。完全本地运行，支持 macOS、Windows 和 Linux。
 
-macOS 增强能力包括：精确窗口定位、后台/最小化窗口观察、原生应用启动、窗口定向动作。
+**安装：** [一条命令](#快速开始) · **短链接：** [`github.com/AntonKhakhalin/ocu`](https://github.com/AntonKhakhalin/ocu) · [opensymph/open-computer-use](https://github.com/opensymph/open-computer-use) 的 fork
+
+```bash
+npm i -g https://github.com/AntonKhakhalin/open-computer-use/releases/download/v1.2.1-anton.1/antonkhakhalin-open-computer-use-1.2.1-anton.1.tgz
+```
+
+**本 fork 在 macOS 上的增强**（其余全部来自上游，未做改动）：
+
+- **精确窗口定位** —— 每个窗口都是真实的 CGWindowID；同 bounds 窗口按身份解析，绝不"取第一个"。
+- **后台窗口观察** —— 无需激活、不抢焦点即可读取指定窗口的无障碍树。
+- **最小化窗口观察** —— 最小化窗口仍可在 `list_windows` 中发现、可解析、可观察；最小化状态下 value 写入可用。
+- **原生 `launch_app`** —— 后台启动（不抢焦点）、实例复用，返回 `pid` + `windows[]`。
+- **窗口级截图** —— `get_window_state` 只截取目标窗口，坐标动作受 `screenshotId` 门禁保护。
+- **后台优先的 AX 交互** —— 凡存在可靠的无障碍操作，一律优先于合成输入。
 
 > [!NOTE]
 > **本仓库是 [opensymph/open-computer-use](https://github.com/opensymph/open-computer-use) 的 fork。**
@@ -54,6 +65,14 @@ macOS 增强能力包括：精确窗口定位、后台/最小化窗口观察、�
 
 安装器都是幂等的：检测已有配置、保留无关的 MCP server 与设置，并明确报告写入了什么。
 
+想一条命令配完所有 Agent？`ocu setup` 会检测本机装了哪些 Agent（Codex、Claude Code、OpenCode、Gemini、Cursor），只配置存在的，且绝不覆盖已有条目：
+
+```bash
+ocu setup                # 一次性配置所有检测到的 Agent
+ocu setup --dry-run      # 先预览会做什么改动
+ocu setup --agents codex,claude
+```
+
 ## 快速开始
 
 最简单的可用路径——从 [GitHub Releases](https://github.com/AntonKhakhalin/open-computer-use/releases) 安装 fork 的 npm tarball：
@@ -79,6 +98,9 @@ macOS 14+ 需要一次性授予 `Accessibility` 和 `Screen Recording`。Windows
 ## 接入 Agent
 
 ```bash
+ocu setup                  # 自动检测本机所有已安装的 Agent 并一次性配置
+
+# 或显式配置某一个 Agent：
 ocu install-codex-mcp      # Codex CLI 与 Codex App
 ocu install-codex-plugin   # Codex App 插件形态
 ocu install-claude-mcp     # Claude Code
@@ -157,11 +179,11 @@ args = ["mcp"]
 - 窗口级截图——`get_window_state` 捕获目标窗口本身，坐标动作受 `screenshotId` 门禁（stale id 直接拒绝）。
 - 同 bounds 窗口身份——frame 完全相同的窗口按 AX 身份解析，绝不"取第一个匹配"；已关闭/幽灵窗口被拒绝，而不是被当成 live 回显。
 - 原生应用启动——`launch_app` 后台启动（不抢焦点）、复用运行中实例、返回 `pid` + `windows[]`。
-- 最小化窗口——可解析、可观察；`set_value` 可用。
+- 最小化窗口——可在 `list_windows` 中发现、可解析、可观察；`set_value` 可用。
 
 **已知限制：**
 
-- 最小化窗口：依赖按键事件输入前请先恢复为可见（值写入仍可用）。
+- 最小化窗口：其发现依赖一个 macOS 私有窗口身份能力——能力不可用时 `list_windows` 只列出屏幕上的窗口（`ocu doctor` 的能力行可见）。依赖按键事件输入前请先恢复为可见（值写入在最小化状态下仍可用）。
 - 无修饰键的 `press_key` 事件在用户正在打字时会被丢弃（输入安静时正常投递）；优先使用 `type_text` / AX 路径——见 [skill 参考](./skills/open-computer-use/references/macos-input.md)。
 - `list_windows` 的窗口标题依赖 Screen Recording 授权；无授权时 id 仍然可用。
 - Linux 的 window2 工具返回显式的 "not supported yet" 错误。
@@ -208,6 +230,7 @@ args = ["mcp"]
 
 ## 与上游的关系
 
+- **短链接：** [github.com/AntonKhakhalin/ocu](https://github.com/AntonKhakhalin/ocu) —— 本项目的别名仓库（仅 README + 安装指引）。
 - **上游项目：** [opensymph/open-computer-use](https://github.com/opensymph/open-computer-use)——原始架构与核心实现。
 - **已向上游提案的 fork 工作：** [PR #2 — macOS 原生 `launch_app`](https://github.com/opensymph/open-computer-use/pull/2)（分支 `feat/macos-launch-app`）、[PR #3 — macOS 原生窗口管理与窗口定向动作](https://github.com/opensymph/open-computer-use/pull/3)（分支 `feat/macos-window-management`）。
 - **仅 fork 分支的工作：** 本仓库的 `feat/public-distribution` 分支（品牌、fork 打包、安装器、发布产物）。

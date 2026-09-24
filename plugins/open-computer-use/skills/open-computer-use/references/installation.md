@@ -2,7 +2,7 @@
 
 Read this reference when the user asks to install, verify, repair, or explain Open Computer Use setup.
 
-This skill documents the `AntonKhakhalin/open-computer-use` fork (a fork of `opensymph/open-computer-use` with native macOS window management). The three install steps are independent — do not confuse them:
+This skill documents the `AntonKhakhalin/open-computer-use` fork (a fork of `opensymph/open-computer-use` with native macOS window management). Repository short link: <https://github.com/AntonKhakhalin/ocu>. The three install steps are independent — do not confuse them:
 
 1. **Runtime install** — puts the `open-computer-use` / `ocu` binary on the PATH. Required for anything to work.
 2. **MCP connection** — points the agent at the runtime (`open-computer-use mcp`). Required for the agent to call the tools.
@@ -73,7 +73,15 @@ Windows and Linux do not use this macOS onboarding step, but they still need a l
 
 ## Install Into Agent MCP Configs
 
-Use the built-in installers when they match the user's agent:
+Or configure all detected agent MCP configs at once (non-interactive, idempotent, never overwrites existing entries):
+
+```sh
+ocu setup
+ocu setup --dry-run
+ocu setup --agents codex,claude
+```
+
+Use the built-in installers when the user needs a single specific agent:
 
 ```sh
 open-computer-use install-codex-mcp
@@ -108,14 +116,14 @@ For any other MCP client, add a stdio server manually:
 Install the skill for Codex:
 
 ```sh
-npx skills add opensymph/open-computer-use -g -a codex --skill open-computer-use -y
+npx skills add AntonKhakhalin/open-computer-use -g -a codex --skill open-computer-use -y
 npx skills ls -g -a codex | rg 'open-computer-use'
 ```
 
 Install the skill for Claude Code:
 
 ```sh
-npx skills add opensymph/open-computer-use -g -a claude-code --skill open-computer-use -y
+npx skills add AntonKhakhalin/open-computer-use -g -a claude-code --skill open-computer-use -y
 ```
 
 Update an existing global skill install:
