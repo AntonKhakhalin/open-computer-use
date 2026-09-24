@@ -25,11 +25,20 @@ final class AXWindowIdentitySPI: @unchecked Sendable {
 
     let isAvailable: Bool
 
+    /// One-line capability report for diagnostics (`ocu doctor`): lets
+    /// developers tell whether exact AX↔CGWindowID identity is available on
+    /// this system, or whether the runtime is degrading to frame-based
+    /// matching with explicit ambiguity reporting.
+    let capabilitySummary: String
+
     private init() {
         let handle = dlopen(Self.frameworkPath, RTLD_LAZY)
         let symbol = handle.flatMap { dlsym($0, Self.getWindowSymbol) }
         getWindowFunction = symbol.map { unsafeBitCast($0, to: GetWindowFunction.self) }
         isAvailable = getWindowFunction != nil
+        capabilitySummary = isAvailable
+            ? "windowIdentity=exact (\(Self.getWindowSymbol) resolved)"
+            : "windowIdentity=frame-fallback (\(Self.getWindowSymbol) unavailable; same-bounds windows report ambiguity instead of guessing)"
     }
 
     /// The CGWindowID backing `window`, or nil when the symbol is

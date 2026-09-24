@@ -184,11 +184,13 @@ enum WindowDirectory {
         }
     }
 
-    /// Targetable windows: on-screen, normal window level, non-zero size.
+    /// Targetable windows: on-screen, normal window level, non-zero size,
+    /// followed by live minimized windows (see `listMinimizedWindowRefs`).
     /// Titles require Screen Recording; without it they come back empty and
     /// are omitted from the reference, while the id is always present.
     static func listWindows() -> [WindowRef] {
-        listEntries(onScreenOnly: true)
+        let onScreen = listEntries(onScreenOnly: true)
+        let onScreenRefs = onScreen
             .filter { $0.layer == 0 && $0.bounds.width > 0 && $0.bounds.height > 0 }
             .map { entry in
                 WindowRef(
@@ -197,6 +199,121 @@ enum WindowDirectory {
                     title: entry.title?.isEmpty == false ? entry.title : nil
                 )
             }
+
+        return onScreenRefs + listMinimizedWindowRefs(base: onScreen)
+    }
+
+    // MARK: - Minimized-window discovery
+
+    /// The AX window element that the private identity mapping confirms
+    /// backs `windowID`, or nil when the mapping symbol is unavailable,
+    /// the app exposes no accessibility window list, or no listed window
+    /// maps to the id. A non-nil result is a proof of liveness: AppKit
+    /// helper windows and closed-window ghosts never appear in the app's
+    /// accessibility window list, so they can never be confirmed.
+    static func axWindowElement(pid: pid_t, windowID: CGWindowID) -> AXUIElement? {
+        guard AXWindowIdentitySPI.shared.isAvailable else {
+            return nil
+        }
+
+        let appElement = AXUIElementCreateApplication(pid)
+        guard let windows = axArray(of: appElement, attribute: kAXWindowsAttribute as String) else {
+            return nil
+        }
+
+        for element in windows {
+            // Real windows carry CGWindowIDs; skip anything provably not a
+            // window, but attempt the mapping when the role is unreadable so
+            // an unknown element can never be missed.
+            if let role = axString(of: element, attribute: kAXRoleAttribute as String),
+               role != kAXWindowRole as String
+            {
+                continue
+            }
+
+            if AXWindowIdentitySPI.shared.windowID(for: element) == windowID {
+                return element
+            }
+        }
+
+        return nil
+    }
+
+    /// Pure pre-filter for minimized-window discovery: full-list entries
+    /// that are absent from the on-screen base, sit at the normal window
+    /// level, have a non-zero size, and are deduplicated by id. The filter
+    /// never invents or drops ids on its own — every survivor is still
+    /// verified live and minimized by the caller before it is listed.
+    static func minimizedDiscoveryCandidates(base: [CGWindowEntry], full: [CGWindowEntry]) -> [CGWindowEntry] {
+        let baseIDs = Set(base.map(\.windowID))
+        var seen = Set<CGWindowID>()
+
+        return full.filter { entry in
+            guard
+                entry.layer == 0,
+                entry.bounds.width > 0,
+                entry.bounds.height > 0,
+                !baseIDs.contains(entry.windowID),
+                !seen.contains(entry.windowID)
+            else {
+                return false
+            }
+
+            seen.insert(entry.windowID)
+            return true
+        }
+    }
+
+    /// Live minimized windows that the on-screen enumeration cannot see.
+    ///
+    /// A candidate is listed only when every step is provable through the
+    /// private AX→CGWindowID identity mapping: the owning process is
+    /// running, the app is not on the deny list, the app's accessibility
+    /// window list contains a window that maps to exactly the entry's id,
+    /// and that window reports `kAXMinimizedAttribute == true`. When the
+    /// mapping symbol is unavailable (or any step is unverifiable) the
+    /// candidate is silently dropped and `list_windows` degrades to the
+    /// on-screen-only behavior; a known minimized id still resolves through
+    /// `resolve`/`get_window` because those read the full window list.
+    ///
+    /// `isConfirmedMinimized` is an injection seam for tests: production
+    /// passes nil and the identity-verified check above runs.
+    static func listMinimizedWindowRefs(
+        base: [CGWindowEntry],
+        full: [CGWindowEntry]? = nil,
+        isConfirmedMinimized: ((CGWindowEntry) -> Bool)? = nil
+    ) -> [WindowRef] {
+        let fullEntries = full ?? listEntries(onScreenOnly: false)
+        let check = isConfirmedMinimized ?? { entry -> Bool in
+            guard let window = axWindowElement(pid: entry.ownerPID, windowID: entry.windowID) else {
+                return false
+            }
+
+            return axBool(of: window, attribute: kAXMinimizedAttribute as String) == true
+        }
+
+        var refs: [WindowRef] = []
+        for entry in minimizedDiscoveryCandidates(base: base, full: fullEntries) {
+            guard let descriptor = runningApp(for: entry.ownerPID) else {
+                continue
+            }
+
+            if let bundleIdentifier = descriptor.bundleIdentifier, AppSafetyPolicy.isBlocked(bundleIdentifier: bundleIdentifier) {
+                continue
+            }
+
+            guard check(entry) else {
+                continue
+            }
+
+            refs.append(WindowRef(
+                app: descriptor.name,
+                id: entry.windowID,
+                title: entry.title?.isEmpty == false ? entry.title : nil
+            ))
+        }
+
+        return refs
     }
 
     static func currentBounds(for id: CGWindowID) -> CGRect? {
@@ -442,42 +559,44 @@ enum WindowDirectory {
         case notFound
     }
 
-    /// Matches the app's accessibility windows to a CGWindowID. Identity
-    /// first: when the private AX→CGWindowID mapping is available and any
-    /// candidate maps to exactly the entry's id, that window is the match
-    /// regardless of geometry (same-bounds windows are unambiguous).
-    /// Otherwise frame geometry with title/focused tie-breakers; several
-    /// same-bounds candidates with no unique tie-break report
-    /// `.ambiguous` rather than returning the first candidate.
-    static func matchAXWindow(appElement: AXUIElement, entry: CGWindowEntry) -> AXWindowMatch {
-        guard let windows = axArray(of: appElement, attribute: kAXWindowsAttribute as String) else {
-            return .notFound
-        }
+    /// One window candidate read from the app's live accessibility tree,
+    /// with the private AX→CGWindowID mapping precomputed (`nil` when the
+    /// mapping symbol is unavailable or the mapping failed for this
+    /// element).
+    struct AXWindowCandidate {
+        let element: AXUIElement
+        let frame: CGRect
+        let title: String?
+        let isFocused: Bool
+        let mappedWindowID: CGWindowID?
+    }
 
-        let focused = axElement(of: appElement, attribute: kAXFocusedWindowAttribute as String)
-        let candidates: [(element: AXUIElement, frame: CGRect, title: String?, isFocused: Bool)] = windows.compactMap { element in
-            guard
-                axString(of: element, attribute: kAXRoleAttribute as String) == kAXWindowRole as String,
-                let frame = axFrame(of: element)
-            else {
-                return nil
-            }
-
-            return (
-                element: element,
-                frame: frame,
-                title: axString(of: element, attribute: kAXTitleAttribute as String),
-                isFocused: focused != nil && CFEqual(element, focused)
-            )
-        }
-
+    /// Pure decision core behind `matchAXWindow`: given pre-read candidates
+    /// and the identity-mapping availability, pick the AX window for one
+    /// CGWindowID entry — or refuse to guess.
+    ///
+    /// The guarantees, all unit-testable without a live accessibility tree:
+    /// - identity available and a candidate maps to the entry's id → exact
+    ///   match regardless of bounds (same-bounds windows are unambiguous);
+    /// - identity available and every candidate mapped to a different id →
+    ///   `.notFound` (the CG entry lingers after the window closed);
+    /// - identity unavailable (or partially unmappable) → frame geometry
+    ///   with title/focused tie-breakers; several same-bounds candidates
+    ///   with no unique tie-break report `.ambiguous`, never a first-match
+    ///   guess;
+    /// - title is only ever a tie-breaker or a last-resort unique match.
+    static func matchWindowCandidates(
+        candidates: [AXWindowCandidate],
+        entry: CGWindowEntry,
+        identityAvailable: Bool
+    ) -> AXWindowMatch {
         // Exact identity: the private mapping resolves the window by its
         // CGWindowID, independent of bounds (windows at identical bounds are
         // common — e.g. a window opened at the previous window's frame).
-        if AXWindowIdentitySPI.shared.isAvailable {
+        if identityAvailable {
             var allMapped = true
             for candidate in candidates {
-                guard let mapped = AXWindowIdentitySPI.shared.windowID(for: candidate.element) else {
+                guard let mapped = candidate.mappedWindowID else {
                     allMapped = false
                     break
                 }
@@ -526,6 +645,38 @@ enum WindowDirectory {
 
         let titleMatches = candidates.filter { $0.title == title }
         return titleMatches.count == 1 ? .matched(titleMatches.first!.element) : .notFound
+    }
+
+    /// Matches the app's accessibility windows to a CGWindowID. Reads the
+    /// live accessibility tree, precomputes the identity mapping, and hands
+    /// the decision to `matchWindowCandidates` (identity first, frame
+    /// geometry fallback, explicit ambiguity — see that function for the
+    /// guarantees).
+    static func matchAXWindow(appElement: AXUIElement, entry: CGWindowEntry) -> AXWindowMatch {
+        guard let windows = axArray(of: appElement, attribute: kAXWindowsAttribute as String) else {
+            return .notFound
+        }
+
+        let focused = axElement(of: appElement, attribute: kAXFocusedWindowAttribute as String)
+        let identityAvailable = AXWindowIdentitySPI.shared.isAvailable
+        let candidates: [AXWindowCandidate] = windows.compactMap { element in
+            guard
+                axString(of: element, attribute: kAXRoleAttribute as String) == kAXWindowRole as String,
+                let frame = axFrame(of: element)
+            else {
+                return nil
+            }
+
+            return AXWindowCandidate(
+                element: element,
+                frame: frame,
+                title: axString(of: element, attribute: kAXTitleAttribute as String),
+                isFocused: focused != nil && CFEqual(element, focused),
+                mappedWindowID: identityAvailable ? AXWindowIdentitySPI.shared.windowID(for: element) : nil
+            )
+        }
+
+        return matchWindowCandidates(candidates: candidates, entry: entry, identityAvailable: identityAvailable)
     }
 
     /// Explicit error for same-bounds ambiguity: the capture is per

@@ -393,7 +393,8 @@ final class OpenComputerUseKitTests: XCTestCase {
     func testPermissionDiagnosticsListsMissingPermissionsInCanonicalOrder() {
         let diagnostics = PermissionDiagnostics(
             accessibilityTrusted: false,
-            screenCaptureGranted: true
+            screenCaptureGranted: true,
+            windowIdentityAvailable: false
         )
 
         XCTAssertEqual(diagnostics.missingPermissions, [.accessibility])
@@ -402,7 +403,8 @@ final class OpenComputerUseKitTests: XCTestCase {
     func testPermissionDiagnosticsHasNoMissingPermissionsWhenAllGranted() {
         let diagnostics = PermissionDiagnostics(
             accessibilityTrusted: true,
-            screenCaptureGranted: true
+            screenCaptureGranted: true,
+            windowIdentityAvailable: true
         )
 
         XCTAssertTrue(diagnostics.missingPermissions.isEmpty)

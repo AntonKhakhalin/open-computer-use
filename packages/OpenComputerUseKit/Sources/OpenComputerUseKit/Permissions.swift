@@ -67,6 +67,11 @@ public enum SystemPermissionKind: String, CaseIterable, Sendable {
 public struct PermissionDiagnostics: Sendable {
     public let accessibilityTrusted: Bool
     public let screenCaptureGranted: Bool
+    /// Whether the private `_AXUIElementGetWindow` symbol resolved at
+    /// runtime. When false the window2 surface degrades to frame-based
+    /// matching with explicit same-bounds ambiguity reporting (never a
+    /// silent wrong-window guess); see `AXWindowIdentitySPI`.
+    public let windowIdentityAvailable: Bool
 
     public static func current() -> PermissionDiagnostics {
         let persisted = TCCAuthorizationStore.current
@@ -81,12 +86,13 @@ public struct PermissionDiagnostics: Sendable {
             screenCaptureGranted: permissionGranted(
                 persisted: persisted.screenRecording,
                 runtime: runtimeScreenCaptureGranted
-            )
+            ),
+            windowIdentityAvailable: AXWindowIdentitySPI.shared.isAvailable
         )
     }
 
     public var summary: String {
-        "Permissions: accessibility=\(accessibilityTrusted ? "granted" : "missing"), screenRecording=\(screenCaptureGranted ? "granted" : "missing")"
+        "Permissions: accessibility=\(accessibilityTrusted ? "granted" : "missing"), screenRecording=\(screenCaptureGranted ? "granted" : "missing"); \(AXWindowIdentitySPI.shared.capabilitySummary)"
     }
 
     public var missingPermissions: [SystemPermissionKind] {
