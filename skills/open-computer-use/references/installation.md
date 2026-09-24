@@ -2,6 +2,12 @@
 
 Read this reference when the user asks to install, verify, repair, or explain Open Computer Use setup.
 
+This skill documents the `AntonKhakhalin/open-computer-use` fork (a fork of `opensymph/open-computer-use` with native macOS window management). The three install steps are independent — do not confuse them:
+
+1. **Runtime install** — puts the `open-computer-use` / `ocu` binary on the PATH. Required for anything to work.
+2. **MCP connection** — points the agent at the runtime (`open-computer-use mcp`). Required for the agent to call the tools.
+3. **Skill install** — adds this guidance to the agent. Optional; it does **not** install the binary or connect MCP. If the agent can see these instructions but `open-computer-use` is not on the PATH, install the runtime first.
+
 ## Platform Requirements
 
 The macOS runtime requires macOS 14.0 or later. Windows and Linux use their own platform runtimes and are not subject to this macOS minimum.
@@ -16,10 +22,23 @@ On macOS versions earlier than 14.0, npm installation may succeed but the bundle
 
 ## Install The CLI
 
-Use npm:
+Use the fork npm package when it is published:
 
 ```sh
-npm install -g @opensymph/open-computer-use
+npm install -g @antonkhakhalin/open-computer-use
+```
+
+Until it is published, install the fork's npm tarball from GitHub Releases (bundled native runtimes for all supported platforms):
+
+```sh
+npm install -g https://github.com/AntonKhakhalin/open-computer-use/releases/download/v1.2.1-anton.1/antonkhakhalin-open-computer-use-1.2.1-anton.1.tgz
+```
+
+Or build from source and link the binary:
+
+```sh
+git clone https://github.com/AntonKhakhalin/open-computer-use.git && cd open-computer-use
+./scripts/install-local-runtime.sh
 ```
 
 Verify:

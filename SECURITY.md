@@ -11,7 +11,7 @@
 请通过 GitHub 私有漏洞报告通道反馈：
 
 ```text
-https://github.com/opensymph/open-computer-use/security/advisories/new
+https://github.com/AntonKhakhalin/open-computer-use/security/advisories/new
 ```
 
 并尽量附上：

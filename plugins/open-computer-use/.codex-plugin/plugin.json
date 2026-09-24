@@ -1,13 +1,14 @@
 {
   "name": "open-computer-use",
   "version": "1.2.0",
-  "description": "Open-source cross-platform Computer Use MCP server packaged as a Codex plugin.",
+  "description": "Open-source cross-platform Computer Use MCP server packaged as a Codex plugin (AntonKhakhalin fork of opensymph/open-computer-use, with native macOS window management in this fork).",
   "author": {
-    "name": "opensymph",
-    "url": "https://github.com/opensymph"
+    "name": "AntonKhakhalin",
+    "url": "https://github.com/AntonKhakhalin"
   },
-  "homepage": "https://github.com/opensymph/open-computer-use",
-  "repository": "https://github.com/opensymph/open-computer-use",
+  "homepage": "https://github.com/AntonKhakhalin/open-computer-use",
+  "repository": "https://github.com/AntonKhakhalin/open-computer-use",
+  "upstream": "https://github.com/opensymph/open-computer-use",
   "license": "MIT",
   "keywords": [
     "computer-use",
@@ -20,21 +21,22 @@
   "interface": {
     "displayName": "Open Computer Use",
     "shortDescription": "Control desktop apps from Codex with the open local server",
-    "longDescription": "Open Computer Use packages this repository's open-source desktop automation server as a Codex plugin. It exposes the same nine desktop-control MCP tools through a local macOS app bundle or Linux / Windows native binary, with semantic accessibility paths preferred before fallback input.",
-    "developerName": "opensymph",
+    "longDescription": "Open Computer Use packages this repository's open-source desktop automation server as a Codex plugin. It is a fork of opensymph/open-computer-use: in addition to the upstream nine desktop-control MCP tools (accessibility-first, background-first), this fork adds native macOS window management (list_windows, get_window, get_window_state, launch_app, activate_window, window-targeted actions). It exposes the tools through a local macOS app bundle or Linux / Windows native binary, with semantic accessibility paths preferred before fallback input.",
+    "developerName": "AntonKhakhalin",
     "category": "Productivity",
     "capabilities": [
       "Interactive",
       "Read",
       "Write"
     ],
-    "websiteURL": "https://github.com/opensymph/open-computer-use",
-    "privacyPolicyURL": "https://github.com/opensymph/open-computer-use/blob/main/SECURITY.md",
-    "termsOfServiceURL": "https://github.com/opensymph/open-computer-use/blob/main/LICENSE",
+    "websiteURL": "https://github.com/AntonKhakhalin/open-computer-use",
+    "privacyPolicyURL": "https://github.com/AntonKhakhalin/open-computer-use/blob/main/SECURITY.md",
+    "termsOfServiceURL": "https://github.com/AntonKhakhalin/open-computer-use/blob/main/LICENSE",
     "defaultPrompt": [
       "Inspect the current UI state of this desktop app without stealing focus when possible",
+      "List the open windows of an app and read one specific window by its id",
       "Open a new local document with keyboard shortcuts first, then type content without moving my real pointer unless required",
-      "Drive the fixture app and verify the nine computer-use tools still behave correctly"
+      "Drive the fixture app and verify the computer-use tools still behave correctly"
     ],
     "brandColor": "#0E7490",
     "composerIcon": "./assets/open-computer-use-small.svg",

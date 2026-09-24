@@ -138,8 +138,8 @@ workflow 会使用 `docs/releases/github/<tag>.md` 创建新 Release；如果 Re
 ### 1. 先看最新 run
 
 ```bash
-gh run list -R opensymph/open-computer-use --limit 10
-gh run view -R opensymph/open-computer-use <run-id> --log-failed
+gh run list -R AntonKhakhalin/open-computer-use --limit 10
+gh run view -R AntonKhakhalin/open-computer-use <run-id> --log-failed
 ```
 
 ### 2. 重点看哪一类错误

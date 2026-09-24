@@ -1,13 +1,14 @@
 {
   "name": "open-computer-use",
   "version": "1.0.4",
-  "description": "Open-source cross-platform Computer Use MCP server packaged as a ZCode plugin: one skill plus an auto-connected stdio MCP server for macOS, Linux, and Windows desktop automation.",
+  "description": "Open-source cross-platform Computer Use MCP server packaged as a ZCode plugin (AntonKhakhalin fork of opensymph/open-computer-use): one skill plus an auto-connected stdio MCP server for macOS, Linux, and Windows desktop automation, with native macOS window management in this fork.",
   "author": {
-    "name": "opensymph",
-    "url": "https://github.com/opensymph"
+    "name": "AntonKhakhalin",
+    "url": "https://github.com/AntonKhakhalin"
   },
-  "homepage": "https://github.com/opensymph/open-computer-use",
-  "repository": "https://github.com/opensymph/open-computer-use",
+  "homepage": "https://github.com/AntonKhakhalin/open-computer-use",
+  "repository": "https://github.com/AntonKhakhalin/open-computer-use",
+  "upstream": "https://github.com/opensymph/open-computer-use",
   "license": "MIT",
   "keywords": [
     "computer-use",

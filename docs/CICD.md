@@ -30,7 +30,7 @@
 当前 release 流水线会产出：
 
 - `dist/release/release-manifest.json`
-- `dist/release/npm/opensymph-open-computer-use-<version>.tgz`
+- `dist/release/npm/antonkhakhalin-open-computer-use-<version>.tgz`（fork 包名 `@antonkhakhalin/open-computer-use`）
 - GitHub Actions 中上传的 npm release artifact
 
 也就是说，即使项目还没进入更复杂的部署阶段，仓库现在也已经同时具备了一条真实可复用的 npm 制品封装链路，以及一条由 git tag 驱动的 macOS app DMG 交付链路。

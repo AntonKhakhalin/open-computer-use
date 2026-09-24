@@ -1,15 +1,15 @@
 {
   "name": "open-computer-use",
-  "description": "open-computer-use: open-source Computer Use MCP server and agent skill for macOS, Linux, and Windows.",
+  "description": "open-computer-use (AntonKhakhalin fork): open-source Computer Use MCP server and agent skill for macOS, Linux, and Windows, with native macOS window management.",
   "plugins": [
     {
       "name": "open-computer-use",
       "version": "1.0.4",
-      "description": "Open-source Computer Use MCP server and skill: control desktop apps on macOS, Linux, and Windows from AI agents via accessibility-first automation.",
+      "description": "Open-source Computer Use MCP server and skill (fork of opensymph/open-computer-use): control desktop apps on macOS, Linux, and Windows from AI agents via accessibility-first automation, with native macOS window management (window2) in this fork.",
       "source": "./plugins/open-computer-use",
       "author": {
-        "name": "opensymph",
-        "url": "https://github.com/opensymph"
+        "name": "AntonKhakhalin",
+        "url": "https://github.com/AntonKhakhalin"
       },
       "category": "developer-tools",
       "displayName": "Open Computer Use",
@@ -19,6 +19,7 @@
       "icon": "./assets/logo/open-computer-use-256.png",
       "examplePrompts": [
         "Inspect the current UI state of this desktop app without stealing focus",
+        "List all open windows and read the accessibility tree of one specific window by its id",
         "Open a new document with keyboard shortcuts, then type content into it",
         "Check why open-computer-use cannot control this app and fix the setup"
       ]

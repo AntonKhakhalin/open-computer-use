@@ -9,6 +9,8 @@ description: Platform-neutral guidance for using Open Computer Use, the open-sou
 
 Open Computer Use exposes Computer Use as a local CLI and stdio MCP server. It is not Codex.app-specific; adapt the commands and MCP config to the agent runtime you are operating in.
 
+This skill documents the `AntonKhakhalin/open-computer-use` fork (a fork of `opensymph/open-computer-use`): in addition to the upstream tool surface it adds native macOS window management (`list_windows`, `get_window`, `get_window_state`, `launch_app`, `activate_window`, window-targeted actions) and a fork-specific install surface. Installing the skill does not install the runtime binary — see [references/installation.md](references/installation.md) for the runtime / MCP / skill distinction.
+
 The macOS runtime requires macOS 14.0 or later. Windows and Linux use their own platform runtimes and are not subject to this macOS minimum.
 
 It supports the same core tool surface across macOS, Linux, and Windows:
