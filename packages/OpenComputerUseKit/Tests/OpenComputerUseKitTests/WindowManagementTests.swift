@@ -689,7 +689,7 @@ final class WindowManagementTests: XCTestCase {
     }
 
     private func requireLiveFixture() throws -> FixtureHandle {
-        requireLiveTestEnvironment("spawns a GUI fixture app and drives real windows")
+        try requireLiveTestEnvironment("spawns a GUI fixture app and drives real windows")
         guard !NSScreen.screens.isEmpty else {
             throw XCTSkip("No GUI session available for the live window management tests")
         }
@@ -1533,7 +1533,7 @@ final class WindowManagementTests: XCTestCase {
             Thread.sleep(forTimeInterval: 0.2)
         }
         guard leftOnScreen else {
-            return XCTSkip("The minimized window never left the on-screen list in time; cannot isolate the discovery path")
+            throw XCTSkip("The minimized window never left the on-screen list in time; cannot isolate the discovery path")
         }
 
         // Now the window is only reachable through minimized-window

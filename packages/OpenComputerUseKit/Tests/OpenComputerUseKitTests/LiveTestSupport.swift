@@ -12,7 +12,7 @@ import XCTest
 ///   OCU_RUN_LIVE_TESTS=1 swift test
 ///
 /// Pure/unit tests never call this gate and run everywhere, including CI.
-func requireLiveTestEnvironment(_ reason: String, file: StaticString = #filePath, line: UInt = #line) {
+func requireLiveTestEnvironment(_ reason: String, file: StaticString = #filePath, line: UInt = #line) throws {
     guard ProcessInfo.processInfo.environment["OCU_RUN_LIVE_TESTS"] == "1" else {
         throw XCTSkip("Live test skipped (set OCU_RUN_LIVE_TESTS=1 to run): \(reason)", file: file, line: line)
     }

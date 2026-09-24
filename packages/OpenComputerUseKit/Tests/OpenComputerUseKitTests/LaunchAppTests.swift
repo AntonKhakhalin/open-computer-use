@@ -75,7 +75,7 @@ final class LaunchAppTests: XCTestCase {
     // MARK: Real launch (requires a GUI session)
 
     func testLaunchAppByBundleIdentifierThenReusesInstanceByName() throws {
-        requireLiveTestEnvironment("launches Calculator and drives its windows")
+        try requireLiveTestEnvironment("launches Calculator and drives its windows")
         guard !NSScreen.screens.isEmpty else {
             throw XCTSkip("No GUI session available for the live launch_app test")
         }
@@ -83,7 +83,6 @@ final class LaunchAppTests: XCTestCase {
             throw XCTSkip("Calculator is not installed on this system")
         }
 
-        let fileManager = FileManager.default
         let preexisting = NSWorkspace.shared.runningApplications.first {
             $0.bundleIdentifier == calculatorBundleIdentifier && !$0.isTerminated
         }

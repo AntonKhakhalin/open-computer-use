@@ -1,3 +1,4 @@
+import AppKit
 import ApplicationServices
 import CoreGraphics
 import Foundation
@@ -37,14 +38,14 @@ final class WindowIdentityCapabilityTests: XCTestCase {
 
     private func candidate(
         _ element: AXUIElement,
-        frame: CGRect = entryBounds,
+        frame: CGRect? = nil,
         title: String? = nil,
         focused: Bool = false,
         mapped: CGWindowID? = nil
     ) -> WindowDirectory.AXWindowCandidate {
         WindowDirectory.AXWindowCandidate(
             element: element,
-            frame: frame,
+            frame: frame ?? entryBounds,
             title: title,
             isFocused: focused,
             mappedWindowID: mapped

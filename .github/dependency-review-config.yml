@@ -1,5 +1,10 @@
 # Configuration for actions/dependency-review-action
 # https://github.com/actions/dependency-review-action#configuration-options
+#
+# Allow-list policy: a dependency passes the license check only when its
+# license is one of the licenses below. In the pinned action version (v4.9.0)
+# the config is rejected as soon as both allow-licenses and deny-licenses are
+# present — even with an empty deny list — so only the allow list is given.
 allow-licenses:
   - MIT
   - Apache-2.0
@@ -7,8 +12,5 @@ allow-licenses:
   - BSD-3-Clause
   - ISC
   - MPL-2.0
-deny-licenses: []
-allow-dependencies-licenses: []
-deny-dependencies-licenses: []
 # fail-on-scopes omitted: the empty string is not a valid scope and made
 # dependency-review fail; the action default (runtime) applies.
