@@ -9,7 +9,7 @@ real `open-computer-use` tool call, and the capture is real screen capture.
 
 - macOS 14+, Accessibility + Screen Recording granted to the installed
   runtime (`ocu doctor`).
-- Installed runtime: `ocu --version` (fork ≥ 1.2.1-anton.1).
+- Installed runtime: `ocu --version` (fork ≥ 1.2.1-anton.2).
 - Two apps only: **Finder** (or a browser) and **TextEdit**.
 - Run the agent session from a terminal; keep the user's own app
   (e.g. a browser) frontmost throughout.

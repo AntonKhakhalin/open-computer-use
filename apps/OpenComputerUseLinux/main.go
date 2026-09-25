@@ -17,7 +17,7 @@ import (
 	"time"
 )
 
-var version = "1.2.1-anton.1"
+var version = "1.2.1-anton.2"
 
 var clickMethodValues = []string{"auto", "accessibility", "app_post", "sky_click", "global"}
 

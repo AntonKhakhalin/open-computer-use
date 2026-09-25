@@ -106,7 +106,7 @@ Verified install paths:
 
 ```bash
 # Runtime (fork npm tarball from GitHub Releases; bundles all platform runtimes)
-npm i -g https://github.com/AntonKhakhalin/open-computer-use/releases/download/v1.2.1-anton.1/antonkhakhalin-open-computer-use-1.2.1-anton.1.tgz
+npm i -g https://github.com/AntonKhakhalin/open-computer-use/releases/download/v1.2.1-anton.2/antonkhakhalin-open-computer-use-1.2.1-anton.2.tgz
 
 # Verify
 ocu doctor
