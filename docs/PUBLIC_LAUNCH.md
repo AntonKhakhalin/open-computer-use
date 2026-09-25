@@ -63,7 +63,7 @@ This fork builds on that foundation and focuses on **window-level precision on m
   closed/ghost windows are rejected instead of being echoed as live.
 
 Distribution is set up so the fork is independently installable and discoverable: a fork
-npm package path (`@antonkhakhalin/open-computer-use`), fork GitHub Releases with bundled
+npm package path (`@khakhalin/open-computer-use`), fork GitHub Releases with bundled
 cross-platform runtimes, a `scripts/install-local-runtime.sh` build-from-source installer,
 per-agent MCP installers (`install-codex-mcp`, `install-claude-mcp`, `install-gemini-mcp`,
 `install-opencode-mcp`, `install-cursor-mcp`), an installable agent skill
@@ -106,7 +106,7 @@ Verified install paths:
 
 ```bash
 # Runtime (fork npm tarball from GitHub Releases; bundles all platform runtimes)
-npm i -g https://github.com/AntonKhakhalin/open-computer-use/releases/download/v1.2.1-anton.2/antonkhakhalin-open-computer-use-1.2.1-anton.2.tgz
+npm i -g https://github.com/AntonKhakhalin/open-computer-use/releases/download/v1.2.1-anton.2/khakhalin-open-computer-use-1.2.1-anton.2.tgz
 
 # Verify
 ocu doctor

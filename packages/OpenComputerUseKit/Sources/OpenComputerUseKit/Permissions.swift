@@ -123,6 +123,7 @@ public enum PermissionSupport {
     private static let appVariantInfoKey = "OpenComputerUseAppVariant"
     private static let npmPackageNames = [
         "@opensymph/open-computer-use",
+        "@khakhalin/open-computer-use",
         "@antonkhakhalin/open-computer-use",
         "open-computer-use",
         "open-computer-use-mcp",

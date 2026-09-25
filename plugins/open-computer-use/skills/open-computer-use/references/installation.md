@@ -25,13 +25,13 @@ On macOS versions earlier than 14.0, npm installation may succeed but the bundle
 Use the fork npm package when it is published:
 
 ```sh
-npm install -g @antonkhakhalin/open-computer-use
+npm install -g @khakhalin/open-computer-use
 ```
 
 Until it is published, install the fork's npm tarball from GitHub Releases (bundled native runtimes for all supported platforms):
 
 ```sh
-npm install -g https://github.com/AntonKhakhalin/open-computer-use/releases/download/v1.2.1-anton.2/antonkhakhalin-open-computer-use-1.2.1-anton.2.tgz
+npm install -g https://github.com/AntonKhakhalin/open-computer-use/releases/download/v1.2.1-anton.2/khakhalin-open-computer-use-1.2.1-anton.2.tgz
 ```
 
 Or build from source and link the binary:

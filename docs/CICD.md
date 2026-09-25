@@ -46,7 +46,7 @@ All GitHub Actions are already pinned to commit SHAs. Keep this constraint when 
 The current release pipeline produces:
 
 - `dist/release/release-manifest.json`
-- `dist/release/npm/antonkhakhalin-open-computer-use-<version>.tgz` (fork package name `@antonkhakhalin/open-computer-use`)
+- `dist/release/npm/khakhalin-open-computer-use-<version>.tgz` (fork package name `@khakhalin/open-computer-use`)
 - The npm release artifact uploaded in GitHub Actions
 
 In other words, even though the project has not yet entered a more complex deployment stage, the repository now already has both a real, reusable npm artifact packaging chain and a git-tag-driven macOS app DMG delivery chain.

@@ -12,7 +12,7 @@
   "packages": [
     {
       "registryType": "npm",
-      "identifier": "@antonkhakhalin/open-computer-use",
+      "identifier": "@khakhalin/open-computer-use",
       "version": "1.2.1-anton.2",
       "transport": {
         "type": "stdio"

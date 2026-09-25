@@ -22,7 +22,7 @@ io.github.<github-owner>/<server-name>
 
    ```sh
    npm login
-   npm publish --access public   # from dist/npm/@antonkhakhalin/open-computer-use
+   npm publish --access public   # from dist/npm/@khakhalin/open-computer-use
    ```
 
 2. Install the official publisher CLI:

@@ -13,7 +13,7 @@ Local computer use for Codex, Claude Code, OpenCode, Gemini, Cursor, and other M
 **Install:** [one command](#quick-install) · **Short link:** [`github.com/AntonKhakhalin/ocu`](https://github.com/AntonKhakhalin/ocu) · Fork of [opensymph/open-computer-use](https://github.com/opensymph/open-computer-use)
 
 ```bash
-npm i -g https://github.com/AntonKhakhalin/open-computer-use/releases/download/v1.2.1-anton.2/antonkhakhalin-open-computer-use-1.2.1-anton.2.tgz
+npm i -g https://github.com/AntonKhakhalin/open-computer-use/releases/download/v1.2.1-anton.2/khakhalin-open-computer-use-1.2.1-anton.2.tgz
 ```
 
 **What this fork adds on macOS** (everything else is upstream, unchanged):
@@ -77,12 +77,12 @@ ocu setup --agents codex,claude
 Simplest working route — the fork's npm tarball from [GitHub Releases](https://github.com/AntonKhakhalin/open-computer-use/releases):
 
 ```bash
-npm i -g https://github.com/AntonKhakhalin/open-computer-use/releases/download/v1.2.1-anton.2/antonkhakhalin-open-computer-use-1.2.1-anton.2.tgz
+npm i -g https://github.com/AntonKhakhalin/open-computer-use/releases/download/v1.2.1-anton.2/khakhalin-open-computer-use-1.2.1-anton.2.tgz
 ocu doctor        # verify the install; macOS: prompts for Accessibility + Screen Recording
 ocu call list_apps
 ```
 
-The tarball bundles the native runtimes for all supported `os-arch` pairs (macOS, Windows, Linux); the launcher picks the right one. When the fork npm package is published, `npm i -g @antonkhakhalin/open-computer-use` will be equivalent.
+The tarball bundles the native runtimes for all supported `os-arch` pairs (macOS, Windows, Linux); the launcher picks the right one. When the fork npm package is published, `npm i -g @khakhalin/open-computer-use` will be equivalent.
 
 No npm? Build from source and link the binary:
 
@@ -115,7 +115,7 @@ This repo ships as a ZCode plugin — one install gives you the skill and an aut
 1. Install the runtime once (the plugin falls back to it when no local build exists):
 
    ```bash
-   npm i -g https://github.com/AntonKhakhalin/open-computer-use/releases/download/v1.2.1-anton.2/antonkhakhalin-open-computer-use-1.2.1-anton.2.tgz
+   npm i -g https://github.com/AntonKhakhalin/open-computer-use/releases/download/v1.2.1-anton.2/khakhalin-open-computer-use-1.2.1-anton.2.tgz
    ```
 
 2. In ZCode, open **Settings → Plugin Management → Discover** and click **+**.
