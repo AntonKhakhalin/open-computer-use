@@ -1,52 +1,52 @@
 # macOS window identity: same-bounds matching and closed-window ghosts
 
-PR #3 的 window2 面有两个正确性问题需要收口。本文档记录调查结论、方案与验证证据；实现落在 `WindowManagement.swift`、`AccessibilitySnapshot.swift` 与新的 `AXWindowIdentitySPI.swift`。
+PR #3's window2 surface has two correctness issues that need closing out. This document records the investigation findings, the scheme, and the verification evidence; the implementation lives in `WindowManagement.swift`, `AccessibilitySnapshot.swift`, and the new `AXWindowIdentitySPI.swift`.
 
-## 问题 1：same-bounds 窗口的 AX 树错配
+## Issue 1: AX tree mismatch for same-bounds windows
 
-**现象（修复前）。** `WindowDirectory.matchAXWindow` 只按 frame 几何把 app 的 AX window 列表匹配到 CGWindowID。两个 bounds 完全相同的窗口会同时命中；tie-break 链是 title → focused → **第一个候选**。当 title 也相同（或 title 不可用，例如无 Screen Recording 授权）时返回第一个候选——即 `get_window_state` 可能把窗口 A 的截图（按 CGWindowID 抓取，本身正确）配上窗口 B 的 AX 树（root 错窗）。
+**Symptom (before the fix).** `WindowDirectory.matchAXWindow` matched the app's AX window list to CGWindowIDs only by frame geometry. Two windows with exactly the same bounds both hit; the tie-break chain was title → focused → **first candidate**. When the title was also identical (or the title was unavailable, e.g. no Screen Recording grant), the first candidate was returned — i.e. `get_window_state` could pair window A's screenshot (captured by CGWindowID, itself correct) with window B's AX tree (wrong window at the root).
 
-**修复。** 可靠的 identity 解析优先，失败时显式报歧义、不猜测：
+**Fix.** Reliable identity resolution comes first; on failure, report ambiguity explicitly instead of guessing:
 
-1. 新增 `AXWindowIdentitySPI`：runtime `dlopen`/`dlsym` 解析私有符号 `_AXUIElementGetWindow`（ApplicationServices/HIServices 导出，`OSStatus (AXUIElement, CGWindowID*)`），模式与既有 `SkyLightSPI` 一致——所有未公开 ABI 收敛在一个文件里作为 review 边界，符号缺失时 capability 降级而不是崩溃。
-2. `matchAXWindow` 返回 `AXWindowMatch` 枚举：
-   - `.matched(element)`：identity 精确命中（SPI 可用且某候选的 `_AXUIElementGetWindow` == 目标 CGWindowID）→ 唯一 frame 命中 → 既有 title/focused tie-break → 唯一 title 兜底。
-   - `.ambiguous(count)`：多个 frame 命中且无唯一 tie-break。**只在 identity 映射不可用/不完整时可达**——映射可用且全量命中失败时直接 `.notFound`。
-   - `.notFound`。
-3. `SnapshotBuilder.buildWindow`（`get_window_state`）遇到 `.ambiguous` 抛出显式错误，不做任何 best-effort 恢复：
+1. Added `AXWindowIdentitySPI`: the runtime resolves the private symbol `_AXUIElementGetWindow` (exported by ApplicationServices/HIServices, `OSStatus (AXUIElement, CGWindowID*)`) via `dlopen`/`dlsym`, following the same pattern as the existing `SkyLightSPI` — all undisclosed ABIs are converged into one file as a review boundary, and a missing symbol degrades the capability rather than crashing.
+2. `matchAXWindow` returns an `AXWindowMatch` enum:
+   - `.matched(element)`: exact identity hit (the SPI is available and some candidate's `_AXUIElementGetWindow` == the target CGWindowID) → unique frame hit → existing title/focused tie-break → unique-title fallback.
+   - `.ambiguous(count)`: multiple frame hits with no unique tie-break. **Only reachable when the identity mapping is unavailable/incomplete** — when the mapping is available and all hits fail, it goes straight to `.notFound`.
+   - `.notFound`.
+3. `SnapshotBuilder.buildWindow` (`get_window_state`) throws an explicit error on `.ambiguous`, with no best-effort recovery:
    `ambiguousWindow(<id>): <count> windows of <app> share the same bounds; the accessibility tree cannot be matched to this window. Move or resize one of them and re-observe with list_windows.`
-4. `activate_window` 遇到 `.ambiguous` 抛同一错误（不能对任意一个同 bounds 窗口做 raise/focus）；`unminimizeIfNeeded` 在歧义时 no-op。
+4. `activate_window` throws the same error on `.ambiguous` (raise/focus cannot be done against just any same-bounds window); `unminimizeIfNeeded` no-ops on ambiguity.
 
-**保证。** `_AXUIElementGetWindow` 可解析时（本机 macOS 27 已验证存在且映射准确），identity 按 CGWindowID 精确解析，`get_window_state` 返回的树 root 必然承载被抓取的 CGWindowID。符号不可用时，same-bounds 请求显式失败而不是错配。
+**Guarantee.** When `_AXUIElementGetWindow` is resolvable (verified present on this machine's macOS 27 with an accurate mapping), identity resolves exactly by CGWindowID, and the tree root returned by `get_window_state` necessarily carries the captured CGWindowID. When the symbol is unavailable, same-bounds requests fail explicitly instead of mismatching.
 
-## 问题 2：closed-window ghost（CGWindow 残留条目）
+## Issue 2: closed-window ghosts (leftover CGWindow entries)
 
-**现象（修复前）。** `WindowDirectory.resolve` 以全量（`optionAll`）CGWindow 列表判活。窗口关闭后条目会在列表里残留：本机实测关闭动画期间约 350ms（alpha 1.0 → 0.003 → 清除），且 TextEdit 类 phantom shell 可长期残留（alpha 1.0）。`get_window` 因此会把已关闭窗口 echo 成 live ref。内容路径（`get_window_state`/`activate_window`/动作工具）此前靠各自失败兜底，但 `get_window` 会宣称 stale 窗口 live。
+**Symptom (before the fix).** `WindowDirectory.resolve` judged liveness against the full (`optionAll`) CGWindow list. After a window closes, its entry lingers in the list: measured locally, about 350ms during the close animation (alpha 1.0 → 0.003 → cleared), and TextEdit-style phantom shells can linger long-term (alpha 1.0). `get_window` therefore echoed closed windows as live refs. The content paths (`get_window_state`/`activate_window`/action tools) previously each relied on their own failure fallbacks, but `get_window` claimed stale windows to be live.
 
-**修复。** 在 `resolve` 中新增 AX-identity 存活检查（解析序：stale-list → 进程退出 → deny 名单 → **AX identity**）：
+**Fix.** Added an AX-identity liveness check in `resolve` (resolution order: stale-list → process exit → denylist → **AX identity**):
 
-- `WindowIdentity` 三态：
-  - `.confirmed`：宿主 app 的 AX window 列表中存在映射到该 CGWindowID 的窗口；
-  - `.absent`：AX window 列表**完整读出**且每个窗口都成功映射，无一命中——该 CG 条目没有 live AX identity；
-  - `.indeterminate`：SPI 不可用、app 不暴露 AX window 列表、或任一候选映射失败——不下结论。
-- `.absent` → 抛官方 stale 错误（与"不在列表"同串，因为窗口确实已关闭）：
+- Three states of `WindowIdentity`:
+  - `.confirmed`: the host app's AX window list contains a window that maps to this CGWindowID;
+  - `.absent`: the AX window list was **read fully** and every window mapped successfully, with no hits — this CG entry has no live AX identity;
+  - `.indeterminate`: the SPI is unavailable, the app does not expose an AX window list, or any candidate mapping failed — no conclusion is drawn.
+- `.absent` → throws the official stale error (the same string as "not in the list", since the window is indeed closed):
   `staleWindowHandle(<id>): the window is no longer open; re-observe with list_windows.`
-- `.indeterminate` **从不拒绝**。不用 alpha / layer / bounds 等任何列表级启发式（会误杀合法的低透明度、fade-in、off-screen helper 之外的真实窗口；本机实测 AppKit 会为每个 app 创建若干 off-screen、无 AX identity 的 helper CG 条目，它们本来就不应可被 target）。
-- minimize 不受影响：实测 minimized 窗口仍在 AX window 列表中且 `_AXUIElementGetWindow` 照常映射（probe：minimize 后 AX-mapped=true）。
+- `.indeterminate` **never rejects**. No list-level heuristics such as alpha / layer / bounds are used (they would wrongly kill real windows other than legitimate low-opacity, fade-in, and off-screen helpers; measured locally, AppKit creates several off-screen, AX-identity-less helper CG entries per app, which should never be targetable in the first place).
+- Minimize is unaffected: measured, a minimized window is still in the AX window list and `_AXUIElementGetWindow` maps it as usual (probe: after minimizing, AX-mapped=true).
 
-**保证（写入文档）。** `get_window` 只在以下全部成立时报告 CGWindowID live：(a) 在全量窗口列表中；(b) 宿主进程存活；(c) 不在 deny 名单；(d) AX-identity 检查为 `.confirmed` 或 `.indeterminate`。当 (d) 被确定性地证伪（`.absent`）时报 stale。检查不可用时（`.indeterminate`）保留旧行为并如实标注——不宣称无法验证的窗口 live，也不拒绝无法验证的窗口。
+**Guarantee (written into the docs).** `get_window` reports a CGWindowID live only when all of the following hold: (a) it is in the full window list; (b) the host process is alive; (c) it is not on the denylist; (d) the AX-identity check is `.confirmed` or `.indeterminate`. When (d) is deterministically falsified (`.absent`), it reports stale. When the check is unavailable (`.indeterminate`), the old behavior is kept and labeled honestly — it does not claim an unverifiable window is live, nor does it reject an unverifiable window.
 
-## 验证（2026-09-22，dev 机 macOS 27.0，全部实测通过）
+## Verification (2026-09-22, dev machine macOS 27.0, all measured and passing)
 
-- 单元测试（fixture 专用窗口，不触碰用户窗口；`swift test --filter WindowManagementTests` 53 例 / 0 失败）：
-  - same-bounds：fixture 新命令 `open_window fixture-second-same-bounds` 在与主窗口完全相同 frame（可同 title）处开第二个窗口；断言 `matchAXWindow` 按 CGWindowID 返回 `AXIdentifier` 正确（`fixture-window` / `fixture-second-window`）的元素；SPI 不可用时断言 `.ambiguous`。
-  - ghost：fixture 开第二个窗口 → 经 fixture 命令关闭 → 立即轮询 `get_window`：必须始终失败且为官方 stale 串、永不成功；记录拒绝发生时 CG 条目是否仍在残留（证据，不做 flaky 硬断言）。本次运行观测到 **rejected while CG entry lingering: true**。
-  - minimize 守护：minimized 的 fixture 窗口必须仍可 resolve（通过 AX `kAXMinimizedAttribute` 最小化/还原）。
-  - resolve 纯逻辑：identity seam 注入 `.absent`/`.confirmed`/`.indeterminate` 三态各自钉住。
-- smoke：`make smoke` 全过；`OPEN_COMPUTER_USE_SMOKE_WINDOW2=1` 下 W1–W12 全过（W11 same-bounds 两窗口独立 resolve/activate，W12 关闭窗口 id 立即 stale）。
-- real-MCP e2e（stdio JSON-RPC，28 项检查全过；窗口全部为 fixture 专用窗口，Finder/Safari/TextEdit 窗口集合前后逐 id 比对不变）：
-  - same-bounds + 同 title 双窗口：`get_window` 双向 echo 各自 id、`get_window_state` 双向成功（无歧义错误、带截图）；
-  - same-bounds + 异 title：`activate_window` 双向切换，以 fixture 状态文件 `keyWindowTitle` 作**独立** oracle 校验被 key 化的窗口正确；
-  - ghost：关闭后立即轮询，实测 `t=0.158s` 时 **CG 条目仍在全量列表（前后两次 cghas 均为 yes）而 `get_window` 已返回精确 stale 串**——该拒绝只能来自 AX-identity 检查（旧列表检查会把残留条目 echo 成 live）；`activate_window`/`click` 同样精确 stale；
-  - minimize 守护：经 fixture 命令 `minimize_window` 最小化后 `get_window` 仍成功。
-  - 环境注记：本轮 e2e 从交互 shell 上下文运行（本机 shell 上下文进程对 debug 二进制持有有效 AX 归因，已用功能性 Finder snapshot preflight 验证）；launchd 上下文不可用——session 内重编后 launchd 归因的 TCC 授权与 debug 二进制的 cdhash 不再匹配，launchd 起 server 会静默失去 AX（所有 identity 检查退化为 indeterminate、窗口级激活失效且被 `isFrontmost` 的 app 级短路掩盖），已实测并弃用该上下文。
+- Unit tests (fixture-dedicated windows, never touching user windows; `swift test --filter WindowManagementTests` 53 cases / 0 failures):
+  - Same-bounds: the fixture's new command `open_window fixture-second-same-bounds` opens a second window at exactly the same frame as the main window (possibly with the same title); asserts `matchAXWindow` returns, by CGWindowID, the element with the correct `AXIdentifier` (`fixture-window` / `fixture-second-window`); asserts `.ambiguous` when the SPI is unavailable.
+  - Ghost: the fixture opens a second window → closes it via a fixture command → immediately polls `get_window`: it must always fail with the official stale string and never succeed; records whether the CG entry was still lingering when the rejection happened (evidence, not a flaky hard assertion). This run observed **rejected while CG entry lingering: true**.
+  - Minimize guard: a minimized fixture window must still be resolvable (minimize/restore via the AX `kAXMinimizedAttribute`).
+  - Pure resolve logic: the identity seam injects the three states `.absent`/`.confirmed`/`.indeterminate`, each pinned separately.
+- Smoke: `make smoke` all pass; under `OPEN_COMPUTER_USE_SMOKE_WINDOW2=1`, W1–W12 all pass (W11: two same-bounds windows resolve/activate independently; W12: a closed window's id goes stale immediately).
+- Real-MCP e2e (stdio JSON-RPC, all 28 checks passed; all windows are fixture-dedicated, and the Finder/Safari/TextEdit window sets compared id-by-id before and after are unchanged):
+  - Same-bounds + same-title pair: `get_window` echoes each id correctly in both directions, `get_window_state` succeeds in both directions (no ambiguity error, with screenshot);
+  - Same-bounds + different titles: `activate_window` switches in both directions, using the fixture state file's `keyWindowTitle` as an **independent** oracle to verify the keyed window is correct;
+  - Ghost: polling immediately after closing, measured that at `t=0.158s` **the CG entry was still in the full list (cghas=yes both times, before and after) while `get_window` already returned the exact stale string** — this rejection can only come from the AX-identity check (the old list check would echo the leftover entry as live); `activate_window`/`click` are likewise exactly stale;
+  - Minimize guard: after minimizing via the fixture command `minimize_window`, `get_window` still succeeds.
+  - Environment note: this e2e round was run from an interactive shell context (this machine's shell context process holds a valid AX attribution for the debug binary, verified with a functional Finder snapshot preflight); the launchd context is unusable — after rebuilding within the session, the launchd attribution's TCC grant no longer matches the debug binary's cdhash, and a launchd-started server silently loses AX (all identity checks degrade to indeterminate, window-level activation fails and is masked by `isFrontmost`'s app-level short-circuit); measured, and this context has been abandoned.

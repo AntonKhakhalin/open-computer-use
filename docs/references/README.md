@@ -1,17 +1,17 @@
-# 外部参考资料
+# External References
 
-这个目录用于沉淀那些值得长期放进仓库、供 Agent 直接读取的外部参考材料。
+This directory collects external reference material worth keeping in the repository long-term for agents to read directly.
 
-适合放这里的内容包括：
+Content suitable for here includes:
 
-- 团队会反复依赖的框架、部署或接入说明。
-- 设计系统参考、API 使用约定。
-- 对外标准、合作方协议或外部文档的简要整理版。
-- 闭源依赖、第三方二进制或外部工具的逆向分析与整理结论。
+- Framework, deployment, or integration documentation the team relies on repeatedly.
+- Design system references, API usage conventions.
+- Concise digests of external standards, partner protocols, or external docs.
+- Reverse-engineering analyses and distilled conclusions for closed-source dependencies, third-party binaries, or external tools.
 
-不要把大段供应商文档原样塞进来。这里应该是经过筛选和整理后的资料。
+Do not dump large chunks of vendor documentation verbatim. This should be curated and organized material.
 
-## 当前目录
+## Current entries
 
 - `macos-skylight-background-click.md`
-  - `click_method=sky_click` 的文章与开源实现来源、固定源码版本、Chromium primer 事件序列、未采用范围和 macOS 私有 SPI 兼容性检查。
+  - Sources for the `click_method=sky_click` article and open-source implementation, the pinned source version, the Chromium primer event sequence, the not-adopted scope, and the macOS private SPI compatibility checks.

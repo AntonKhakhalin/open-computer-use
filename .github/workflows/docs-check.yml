@@ -30,4 +30,4 @@ jobs:
         run: ./scripts/check-docs.sh
 
       - name: Lint markdown
-        run: npx --yes markdownlint-cli "README.md" "README.zh-CN.md" "docs/**/*.md"
+        run: npx --yes markdownlint-cli "README.md" "docs/**/*.md"

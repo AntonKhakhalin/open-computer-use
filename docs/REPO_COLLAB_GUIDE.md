@@ -1,47 +1,47 @@
-# 仓库协作约定
+# Repository Collaboration Conventions
 
-这份文档定义的是一个 Agent-first 仓库的默认协作方式。真正和技术栈强相关的约束，建议拆到相邻专题文档里维护，不要把这里写成大杂烩。
+This document defines the default collaboration style for an agent-first repository. Constraints that are strongly tied to a specific tech stack should be split into dedicated neighboring docs — do not turn this file into a grab bag.
 
-## 开发原则
+## Development principles
 
-- 优先选择简单、清晰、可观测的方案，不要堆难以维护的复杂度。
-- 以 Agent 可读、可执行为目标组织仓库；重要信息如果只存在聊天记录和脑子里，等于不存在。
-- 代码、文档、测试、配置和发布记录要尽量同源更新。
-- 如果 Agent 在同一类问题上反复失败，优先修环境、修脚手架、修规范，不要把“多试几次 prompt”当主方案。
-- 每次修 bug，都顺手检查测试和文档是否该补强，尽量让同类问题只修一次。
+- Prefer simple, clear, observable solutions; do not pile up hard-to-maintain complexity.
+- Organize the repository so it is readable and executable by agents; important information that exists only in chat logs and people's heads is the same as not existing.
+- Keep code, docs, tests, configuration, and release records updated from the same source.
+- If an agent keeps failing on the same kind of problem, fix the environment, the scaffolding, and the conventions first — do not treat "try the prompt a few more times" as the main solution.
+- Every time you fix a bug, also check whether the tests and docs should be strengthened, so the same kind of problem gets fixed only once.
 
-## 文档纪律
+## Documentation discipline
 
-- `AGENTS.md` 只做路由，不要在里面堆一大坨规则。
-- `docs/` 是仓库级知识的正式来源。
-- 行为一旦变化，对应文档就要在同一次改动里同步更新。
-- 仓库内文件、目录、脚本入口和文档链接一律使用相对路径，不要写任何机器相关的绝对路径。
-- 比起继续往大文档里堆内容，更推荐新增一份边界清楚的小文档。
+- `AGENTS.md` is routing only; do not pile a big blob of rules into it.
+- `docs/` is the authoritative source of repository-level knowledge.
+- Once behavior changes, the corresponding docs must be updated in the same change.
+- Files, directories, script entry points, and doc links inside the repository always use relative paths; never write machine-specific absolute paths.
+- Rather than keep piling content into a big doc, prefer adding a small doc with clear boundaries.
 
-## Git 与评审
+## Git and review
 
-- commit 尽量保持范围清晰、描述准确。
-- `git push` 前先同步远端最新代码，避免把过期分支状态直接推上去。
-- 提交或发 PR 前，确认文档、示例和脚本是否已经反映最终状态。
-- 复杂或高风险改动，先把计划与关键决策落到文档里再动手。
-- 评审里尽量引用仓库内文件，不要依赖只有少数人知道的上下文。
+- Keep commits scoped and accurately described.
+- Sync the latest remote code before `git push`, so you do not push a stale branch state.
+- Before committing or opening a PR, confirm docs, examples, and scripts already reflect the final state.
+- For complex or high-risk changes, write the plan and key decisions into docs first, then start.
+- In reviews, reference files in the repository; do not rely on context that only a few people know.
 
-## 测试与验证
+## Testing and verification
 
-- 每次有实质性代码变更，都应该让验证能力比改之前更强一点。
-- 优先沉淀成仓库里可直接运行的命令和脚本。
-- 如果项目包含 UI，要保证本地能独立启动、验证。
-- 如果项目依赖 logs、metrics、traces，最好能提供本地或 CI 可用的访问路径。
-- 即使项目还没接入真实业务构建链路，仓库级 CI 也应该先能跑起来。
+- Every substantive code change should leave the verification capability slightly stronger than before.
+- Prefer crystallizing it into commands and scripts that can run directly in the repository.
+- If the project includes a UI, it must be able to start and be verified independently locally.
+- If the project depends on logs, metrics, or traces, provide local or CI-accessible paths to them where possible.
+- Even if the project has not yet wired in a real build pipeline, repository-level CI should already be running.
 
-## CI/CD 与交付方式
+## CI/CD and delivery
 
-- CI 至少要守住仓库可读性和基础安全，不要等项目变大后再补。
-- CD 骨架应该优先产出明确制品和 provenance，而不是过早假设部署目标。
-- 未来接入真实技术栈时，优先在现有流水线上扩展，不要另起一套临时脚本把它绕开。
+- CI should at least guard repository readability and basic security; do not wait until the project grows to add it.
+- The CD skeleton should first produce explicit artifacts and provenance, rather than assuming deployment targets too early.
+- When a real tech stack is wired in later, extend the existing pipelines first; do not set up a separate ad-hoc script that bypasses them.
 
-## 配置卫生
+## Configuration hygiene
 
-- 示例配置和实际默认值要尽量一致。
-- 所有启动所需的环境变量和外部依赖都要写清楚。
-- 不要让关键初始化步骤只存在 README 的角落里，能脚本化就脚本化。
+- Keep example configuration as consistent as possible with the actual defaults.
+- Document every environment variable and external dependency needed to start.
+- Do not let critical initialization steps live only in a corner of the README; script them wherever possible.

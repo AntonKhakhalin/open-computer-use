@@ -7,7 +7,6 @@
 [![Release](https://img.shields.io/github/v/release/AntonKhakhalin/open-computer-use?label=fork%20release)](https://github.com/AntonKhakhalin/open-computer-use/releases)
 [![Fork of opensymph/open-computer-use](https://img.shields.io/badge/fork%20of-opensymph%2Fopen--computer--use-0E7490)](https://github.com/opensymph/open-computer-use)
 [![License: MIT](https://img.shields.io/badge/License-MIT-informational)](./LICENSE)
-[![简体中文](https://img.shields.io/badge/简体中文-点击查看-orange)](./README.zh-CN.md)
 
 Local computer use for Codex, Claude Code, OpenCode, Gemini, Cursor, and other MCP-capable agents: a local MCP server that gives agents eyes and hands on your desktop — see an app's interface, click, type, scroll, and drag through the accessibility layer, without taking over your real mouse and keyboard. Runs entirely on your machine, on macOS, Windows, and Linux.
 
@@ -222,7 +221,7 @@ Five additional window-level tools — `list_windows`, `get_window`, `get_window
 | --- | --- | --- |
 | macOS | Swift | Visual cursor, permission onboarding, `sky_click` background clicks, full window2 API with exact CGWindowID identity; display-level desktop commands (see below). |
 | Windows | Go, single exe | UI Automation + Win32, process-isolated operations, full window2 API; display-level desktop commands (see below). |
-| Linux | Go, single binary | Native AT-SPI2 over D-Bus; display-level X11 commands (see below). |
+| Linux | Go, single binary | Native AT-SPI2 over D-Bus, zero runtime dependencies; display-level X11 commands (see below). |
 
 ### Display-level desktop commands (all platforms)
 

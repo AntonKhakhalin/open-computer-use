@@ -1,38 +1,38 @@
-# 稳定性与可运维性
+# Stability and Operability
 
-## 当前最低验证线
+## Current minimum verification line
 
-- 构建：`swift build`
-- 单元测试：`swift test`
-- 端到端 smoke：`./scripts/run-tool-smoke-tests.sh`
-- macOS SkyLight 实机回归：`OPEN_COMPUTER_USE_RUN_SKY_CLICK_LIVE_TEST=1 swift test --filter SkyClickLiveTests`
-- Linux runtime：`(cd apps/OpenComputerUseLinux && go test ./...)`、`./scripts/build-open-computer-use-linux.sh --arch arm64`
-- 本地诊断：
+- Build: `swift build`
+- Unit tests: `swift test`
+- End-to-end smoke: `./scripts/run-tool-smoke-tests.sh`
+- macOS SkyLight live regression: `OPEN_COMPUTER_USE_RUN_SKY_CLICK_LIVE_TEST=1 swift test --filter SkyClickLiveTests`
+- Linux runtime: `(cd apps/OpenComputerUseLinux && go test ./...)`, `./scripts/build-open-computer-use-linux.sh --arch arm64`
+- Local diagnostics:
   - `open-computer-use doctor`
   - `open-computer-use snapshot <app>`
 
-## 已知关键依赖
+## Known critical dependencies
 
-- macOS 上必须给 `Open Computer Use.app` 授权 `Accessibility` 与 `Screen Recording`；终端本身不应该再是必需授权对象。
-- macOS `click_method=sky_click` 额外依赖 SkyLight / ApplicationServices 私有符号 `SLEventPostToPid`、`SLEventSetIntegerValueField`、`CGEventSetWindowLocation`、`SLPSPostEventRecordTo` 和 `GetProcessForPID`。运行时会动态探测并 fail closed，但 macOS 更新、签名方式或目标 app 输入策略变化仍可能让后台投递失效。受控实机回归除 DOM、前台 PID、鼠标和 z-order 外，还必须验证前台 AppKit active、key window、first responder 以及 resign/key-loss 计数。
-- smoke suite 依赖本地 GUI session，不能把它当成无头环境命令。
-- 普通 app 的 `get_app_state` 结果依赖 AX tree 和窗口截图，复杂 app 上输出会有差异；Electron/WebView app 的 AX tree 通常很深，当前会压缩空 wrapper 并放宽遍历深度，以优先保留可操作文本、按钮和输入框。
-- Linux runtime 依赖已登录桌面用户 session；缺少 `XDG_RUNTIME_DIR`、`DBUS_SESSION_BUS_ADDRESS` 或 display 环境时，会尝试从 `/run/user/<uid>` 和常见桌面进程自动发现当前用户的 session env。纯 SSH tty 如果找不到桌面 session 仍不能直接访问 AT-SPI GUI tree。
-- GNOME Wayland 截图可能被 compositor 限制，当前 Linux bridge 会把黑图视为无效截图并省略 image block。
+- On macOS, `Open Computer Use.app` must be granted `Accessibility` and `Screen Recording`; the terminal itself should no longer be a required authorization target.
+- macOS `click_method=sky_click` additionally depends on the SkyLight / ApplicationServices private symbols `SLEventPostToPid`, `SLEventSetIntegerValueField`, `CGEventSetWindowLocation`, `SLPSPostEventRecordTo`, and `GetProcessForPID`. The runtime probes them dynamically and fails closed, but macOS updates, signing changes, or target app input-policy changes can still break background delivery. The controlled live regression must verify, beyond DOM, foreground PID, mouse, and z-order, the foreground AppKit active state, key window, first responder, and the resign/key-loss counts.
+- The smoke suite depends on a local GUI session; it must not be treated as a headless-environment command.
+- `get_app_state` results for regular apps depend on the AX tree and window screenshots; output varies across complex apps. Electron/WebView apps usually have very deep AX trees; the current implementation compresses empty wrappers and relaxes traversal depth to prioritize keeping actionable text, buttons, and input fields.
+- The Linux runtime depends on a signed-in desktop user session; when `XDG_RUNTIME_DIR`, `DBUS_SESSION_BUS_ADDRESS`, or the display environment is missing, it tries to auto-discover the current user's session env from `/run/user/<uid>` and common desktop processes. A pure SSH tty that cannot find a desktop session still cannot directly access the AT-SPI GUI tree.
+- GNOME Wayland screenshots may be restricted by the compositor; the current Linux bridge treats a black image as an invalid screenshot and omits the image block.
 
-## 当前故障排查顺序
+## Current troubleshooting order
 
-1. 先跑 `open-computer-use doctor`，确认权限状态；如果缺权限，命令会通过 `.app` app agent 拉起权限 onboarding 窗口，已全部授权则只打印状态并退出。
-2. 用 `open-computer-use list-apps` 确认目标 app 是否被发现。
-3. 用 `open-computer-use snapshot <app>` 看是 transport 问题还是 snapshot / action 问题。
-4. 如果只有 `sky_click` 失败，先重新执行 `get_app_state`，确认窗口仍为 on-screen、未隐藏/最小化且没有切换 Space；错误里出现 `missing SkyLight symbols` 时不要改用隐式 fallback，应按当前 macOS 版本重新验证私有 SPI。被遮挡的 Chromium 页面仍无效果时，再用受控页面区分 renderer 策略变化与坐标/window-local 映射问题。
-5. 如果只想验证仓库基线，直接跑 fixture + smoke，不要先在复杂第三方 app 上排查。
-6. 排查 Linux runtime 时，先确认目标命令是否由桌面用户运行，再用 `open-computer-use call list_apps` 和 `open-computer-use snapshot <app>` 区分 session/env 问题与 AT-SPI tree/action 问题。如果是 Codex MCP，重新执行 `open-computer-use install-codex-mcp` 后重启 Codex，确认配置仍是 `open-computer-use mcp`。
+1. Run `open-computer-use doctor` first to confirm the permission state; if permissions are missing, the command brings up the permission onboarding window via the `.app` app agent. If everything is already granted, it only prints the state and exits.
+2. Use `open-computer-use list-apps` to confirm the target app is discovered.
+3. Use `open-computer-use snapshot <app>` to tell whether it is a transport problem or a snapshot / action problem.
+4. If only `sky_click` fails, re-run `get_app_state` first and confirm the window is still on-screen, not hidden/minimized, and no Space switch happened. When the error contains `missing SkyLight symbols`, do not switch to an implicit fallback; re-verify the private SPI against the current macOS version. If an occluded Chromium page still has no effect, then use a controlled page to distinguish a renderer policy change from a coordinate/window-local mapping problem.
+5. If you only want to verify the repository baseline, run fixture + smoke directly; do not start troubleshooting on complex third-party apps first.
+6. When troubleshooting the Linux runtime, first confirm the target command is run by the desktop user, then use `open-computer-use call list_apps` and `open-computer-use snapshot <app>` to distinguish session/env problems from AT-SPI tree/action problems. If it is Codex MCP, re-run `open-computer-use install-codex-mcp`, restart Codex, and confirm the configuration is still `open-computer-use mcp`.
 
-## 后续补强方向
+## Future hardening directions
 
-- 增加结构化日志和失败原因分类。
-- 继续补充 screenshot capture / AX traversal 的失败上下文和普通 app 回归样本。
-- 增加普通 app 回归样本，而不是只覆盖 fixture。
+- Add structured logging and failure-reason classification.
+- Continue adding failure context and regular-app regression samples for screenshot capture / AX traversal.
+- Add more regular-app regression samples instead of only covering the fixture.
 
-CI/CD 流程结构和 release 自动化的默认方案，统一写在 `docs/CICD.md`。
+The CI/CD pipeline structure and the default plan for release automation are written centrally in `docs/CICD.md`.

@@ -1,10 +1,10 @@
-# 设计原则
+# Design Principles
 
-这份文档用于沉淀产品层面相对稳定的设计原则。
+This document collects relatively stable product-level design principles.
 
-建议放的内容包括：
+Suggested content includes:
 
-- 整体视觉原则和交互目标。
-- 字体、颜色、间距和组件系统的选择。
-- 无障碍与响应式设计要求。
-- 什么场景该复用共享组件，什么场景可以例外。
+- Overall visual principles and interaction goals.
+- Choices of fonts, colors, spacing, and the component system.
+- Accessibility and responsive design requirements.
+- Which scenarios should reuse shared components, and which may be exceptions.

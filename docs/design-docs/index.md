@@ -1,14 +1,14 @@
-# 设计文档索引
+# Design Docs Index
 
-用这个目录集中管理架构设计和产品设计文档。
+Use this directory to centrally manage architecture and product design documents.
 
-建议约定：
+Suggested conventions:
 
-- 一个主题一份文档。
-- 每份文档写清当前状态和简短摘要。
-- 关联引入它的 execution plan 或 spec。
+- One document per topic.
+- Each document states its current status and a short summary.
+- Link the execution plan or spec that introduced it.
 
-## 初始文档
+## Initial documents
 
 - `core-beliefs.md`
-- `macos-window-identity.md`：macOS window2 的窗口身份解析——same-bounds 窗口的 AX 树错配与 closed-window ghost（CGWindow 残留条目）的调查结论、identity 方案（`_AXUIElementGetWindow` SPI + 显式歧义错误 + AX-identity 存活检查）与保证。
+- `macos-window-identity.md`: macOS window2 window identity resolution — investigation findings for same-bounds window AX tree mismatch and closed-window ghosts (leftover CGWindow entries), the identity scheme (`_AXUIElementGetWindow` SPI + explicit ambiguity error + AX-identity liveness check), and the guarantees.
