@@ -175,7 +175,7 @@ final class DesktopCommandTests: XCTestCase {
         XCTAssertTrue(top.contains("polish"), "top-level help missing polish subcommand:\n\(top)")
     }
 
-    func testDisplayCommandsRideTheAppAgentProxy() {
+    func testDisplayCommandsRideTheAppAgentProxyOnlyWhenOptedIn() {
         for command: OpenComputerUseCLICommand in [
             .screenshot(output: nil),
             .cursorPosition,
@@ -185,11 +185,20 @@ final class DesktopCommandTests: XCTestCase {
             XCTAssertTrue(
                 shouldUseMacOSAppAgentProxy(
                     command: command,
-                    proxyDisabled: false,
+                    proxyEnabled: true,
                     appBundleAvailable: true,
                     runningFromLaunchServicesAppInstance: false
                 ),
-                "\(command) should proxy through the app agent for TCC permissions"
+                "\(command) should proxy through the app agent for TCC permissions when the proxy is opted in"
+            )
+            XCTAssertFalse(
+                shouldUseMacOSAppAgentProxy(
+                    command: command,
+                    proxyEnabled: false,
+                    appBundleAvailable: true,
+                    runningFromLaunchServicesAppInstance: false
+                ),
+                "\(command) should run in-process by default for the in-bundle binary's own TCC identity"
             )
         }
     }

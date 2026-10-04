@@ -39,6 +39,17 @@ enum OpenComputerUseMain {
 
         switch command {
         case .mcp:
+            // In-process is the default now: warn on stderr (never prompt,
+            // stdout is reserved for JSON-RPC) so host logs can surface the
+            // permission gap before the first tool call fails.
+            let permissions = PermissionDiagnostics.current()
+            if !permissions.allGranted {
+                writeToStandardError(
+                    "warning: Open Computer Use is missing required macOS permissions "
+                        + "(\(permissions.missingPermissions.map(\.rawValue).joined(separator: ", "))); tool calls will fail until they are granted. "
+                        + "Run `open-computer-use doctor` or grant access in System Settings > Privacy & Security."
+                )
+            }
             let service = ComputerUseService()
             let server = StdioMCPServer(service: service)
             if VisualCursorSupport.isEnabled {

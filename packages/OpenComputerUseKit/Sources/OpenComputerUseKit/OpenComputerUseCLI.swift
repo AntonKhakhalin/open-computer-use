@@ -23,13 +23,19 @@ public enum OpenComputerUseCallInvocation: Equatable {
 
 public let openComputerUseDefaultInterCallDelay: TimeInterval = 1
 
+/// Decides whether a command is forwarded to the legacy background app-agent
+/// over the unix socket. The default is in-process execution: launchers exec
+/// the in-bundle binary, so the calling process already carries the
+/// `Open Computer Use.app` TCC identity and no second process is needed.
+/// Proxying stays available only behind the explicit
+/// `OPEN_COMPUTER_USE_AGENT_PROXY=1` opt-in.
 public func shouldUseMacOSAppAgentProxy(
     command: OpenComputerUseCLICommand,
-    proxyDisabled: Bool,
+    proxyEnabled: Bool,
     appBundleAvailable: Bool,
     runningFromLaunchServicesAppInstance: Bool
 ) -> Bool {
-    guard !proxyDisabled, appBundleAvailable else {
+    guard proxyEnabled, appBundleAvailable else {
         return false
     }
 

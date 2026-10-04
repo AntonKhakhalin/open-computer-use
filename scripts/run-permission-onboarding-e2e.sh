@@ -31,14 +31,14 @@ trap cleanup EXIT
 
 echo "Using CLI: ${cli}"
 if [[ "${disable_app_agent_proxy}" == "1" || "${disable_app_agent_proxy}" == "true" || "${disable_app_agent_proxy}" == "yes" ]]; then
-  echo "Using direct CLI permission checks (app-agent proxy disabled for this E2E)."
+  echo "Using direct CLI permission checks (in-process default for this E2E)."
   run_cli() {
-    OPEN_COMPUTER_USE_DISABLE_APP_AGENT_PROXY=1 "${cli}" "$@"
+    OPEN_COMPUTER_USE_AGENT_PROXY= "${cli}" "$@"
   }
 else
-  echo "Using default CLI app-agent proxy behavior."
+  echo "Using the legacy app-agent proxy (explicitly opted in for this E2E)."
   run_cli() {
-    "${cli}" "$@"
+    OPEN_COMPUTER_USE_AGENT_PROXY=1 "${cli}" "$@"
   }
 fi
 

@@ -328,7 +328,7 @@ final class OpenComputerUseKitTests: XCTestCase {
         XCTAssertFalse(output.hasToolError)
     }
 
-    func testMacOSAppAgentProxyDecisionRoutesAutomationCommandsThroughAppBundle() {
+    func testMacOSAppAgentProxyDecisionRoutesAutomationCommandsWhenOptedIn() {
         for command in [
             OpenComputerUseCLICommand.mcp,
             .doctor,
@@ -338,10 +338,33 @@ final class OpenComputerUseKitTests: XCTestCase {
         ] {
             XCTAssertTrue(shouldUseMacOSAppAgentProxy(
                 command: command,
-                proxyDisabled: false,
+                proxyEnabled: true,
                 appBundleAvailable: true,
                 runningFromLaunchServicesAppInstance: false
             ))
+        }
+    }
+
+    func testMacOSAppAgentProxyDecisionDefaultsToInProcess() {
+        for command in [
+            OpenComputerUseCLICommand.mcp,
+            .doctor,
+            .listApps,
+            .snapshot(app: "TextEdit"),
+            .call(.single(toolName: "list_apps", argumentsJSON: nil, argumentsFile: nil)),
+            .launchOnboarding,
+            .screenshot(output: nil),
+            .cursorPosition,
+        ] {
+            XCTAssertFalse(
+                shouldUseMacOSAppAgentProxy(
+                    command: command,
+                    proxyEnabled: false,
+                    appBundleAvailable: true,
+                    runningFromLaunchServicesAppInstance: false
+                ),
+                "\(command) must run in-process unless the legacy app-agent proxy is explicitly opted in"
+            )
         }
     }
 
@@ -353,7 +376,7 @@ final class OpenComputerUseKitTests: XCTestCase {
         ] {
             XCTAssertFalse(shouldUseMacOSAppAgentProxy(
                 command: command,
-                proxyDisabled: false,
+                proxyEnabled: true,
                 appBundleAvailable: true,
                 runningFromLaunchServicesAppInstance: false
             ))
@@ -363,28 +386,22 @@ final class OpenComputerUseKitTests: XCTestCase {
     func testMacOSAppAgentProxyDecisionDoesNotProxyLaunchServicesAppOpen() {
         XCTAssertTrue(shouldUseMacOSAppAgentProxy(
             command: .launchOnboarding,
-            proxyDisabled: false,
+            proxyEnabled: true,
             appBundleAvailable: true,
             runningFromLaunchServicesAppInstance: false
         ))
         XCTAssertFalse(shouldUseMacOSAppAgentProxy(
             command: .launchOnboarding,
-            proxyDisabled: false,
+            proxyEnabled: true,
             appBundleAvailable: true,
             runningFromLaunchServicesAppInstance: true
         ))
     }
 
-    func testMacOSAppAgentProxyDecisionHonorsDisableAndMissingBundle() {
+    func testMacOSAppAgentProxyDecisionHonorsMissingBundle() {
         XCTAssertFalse(shouldUseMacOSAppAgentProxy(
             command: .doctor,
-            proxyDisabled: true,
-            appBundleAvailable: true,
-            runningFromLaunchServicesAppInstance: false
-        ))
-        XCTAssertFalse(shouldUseMacOSAppAgentProxy(
-            command: .doctor,
-            proxyDisabled: false,
+            proxyEnabled: true,
             appBundleAvailable: false,
             runningFromLaunchServicesAppInstance: false
         ))

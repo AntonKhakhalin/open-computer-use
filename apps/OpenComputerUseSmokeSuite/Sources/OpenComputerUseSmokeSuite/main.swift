@@ -36,7 +36,7 @@ final class MCPClient {
         _ = try request(method: "initialize", params: [
             "clientInfo": [
                 "name": "OpenComputerUseSmokeSuite",
-                "version": "1.2.1-anton.2",
+                "version": "1.2.1-anton.3",
             ],
             "capabilities": [:],
             "protocolVersion": "2025-03-26",
@@ -175,7 +175,7 @@ enum SmokeError: Error {
 enum OpenComputerUseSmokeSuite {
     static func main() throws {
         let productsDirectory = try locateProductsDirectory()
-        let fixtureURL = productsDirectory.appendingPathComponent("OpenComputerUseFixture")
+        let fixtureURL = try packagedFixtureExecutableURL(productsDirectory: productsDirectory)
         let serverURL = productsDirectory.appendingPathComponent("OpenComputerUse")
         let appName = "OpenComputerUseFixture"
         let mode = SmokeMode(arguments: CommandLine.arguments)
@@ -672,7 +672,10 @@ enum OpenComputerUseSmokeSuite {
 
     private static func smokeServerEnvironment() -> [String: String] {
         var environment = ProcessInfo.processInfo.environment
-        environment["OPEN_COMPUTER_USE_DISABLE_APP_AGENT_PROXY"] = "1"
+        // Pin the default contract: the smoke suite runs the MCP server
+        // in-process, so an opted-in legacy agent proxy in the caller's
+        // environment must not change that.
+        environment.removeValue(forKey: "OPEN_COMPUTER_USE_AGENT_PROXY")
         return environment
     }
 
@@ -680,6 +683,47 @@ enum OpenComputerUseSmokeSuite {
         var environment = ProcessInfo.processInfo.environment
         environment["OPEN_COMPUTER_USE_FIXTURE_HEADLESS"] = "1"
         return environment
+    }
+
+    /// Packages the bare SwiftPM fixture executable into a minimal `.app` bundle so
+    /// LaunchServices attributes it its own identity (name + bundle id) even when the
+    /// smoke suite itself is launched under an app-style parent (agent shells inherit
+    /// the parent's identity onto bare executables). Keep the bundle id byte-for-byte
+    /// in sync with AppDiscovery's internal `fixtureListBundleIdentifier`.
+    private static func packagedFixtureExecutableURL(productsDirectory: URL) throws -> URL {
+        let bareExecutable = productsDirectory.appendingPathComponent("OpenComputerUseFixture")
+        let bundleURL = productsDirectory.appendingPathComponent("OpenComputerUseFixture.app")
+        let contentsURL = bundleURL.appendingPathComponent("Contents", isDirectory: true)
+        let macosURL = contentsURL.appendingPathComponent("MacOS", isDirectory: true)
+        let targetURL = macosURL.appendingPathComponent("OpenComputerUseFixture")
+
+        let fileManager = FileManager.default
+        try fileManager.createDirectory(at: macosURL, withIntermediateDirectories: true)
+        if fileManager.fileExists(atPath: targetURL.path) {
+            try fileManager.removeItem(at: targetURL)
+        }
+        try fileManager.copyItem(at: bareExecutable, to: targetURL)
+        try fileManager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: targetURL.path)
+
+        let infoPlist = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+        <plist version="1.0">
+        <dict>
+            <key>CFBundleExecutable</key>
+            <string>OpenComputerUseFixture</string>
+            <key>CFBundleIdentifier</key>
+            <string>dev.opencodex.opencomputeruse.fixture</string>
+            <key>CFBundleName</key>
+            <string>OpenComputerUseFixture</string>
+            <key>CFBundlePackageType</key>
+            <string>APPL</string>
+        </dict>
+        </plist>
+        """
+        try infoPlist.write(to: contentsURL.appendingPathComponent("Info.plist"), atomically: true, encoding: .utf8)
+
+        return targetURL
     }
 
     private static func locateProductsDirectory() throws -> URL {

@@ -8,4 +8,5 @@ __pycache__/
 *.pyc
 apps/OpenComputerUseWindows/opencomputerusewindows.exe
 scripts/releasetool/releasetool.exe
+scripts/releasetool/releasetool
 apps/OpenComputerUseLinux/opencomputeruselinux
