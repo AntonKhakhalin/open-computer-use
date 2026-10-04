@@ -67,7 +67,7 @@ enum AppDiscovery {
     private static let lastUsedDateRankingAttribute = "kMDItemLastUsedDate_Ranking"
     private static let useCountAttribute = "kMDItemUseCount"
     private static let maxRecentNonRunningApps = 10
-    private static let fixtureListBundleIdentifier = "dev.opencodex.opencomputeruse.fixture"
+    static let fixtureListBundleIdentifier = "dev.opencodex.opencomputeruse.fixture"
     private static let standardApplicationSearchRoots: [URL] = [
         URL(fileURLWithPath: "/Applications", isDirectory: true),
         URL(fileURLWithPath: "/System/Applications", isDirectory: true),
@@ -344,15 +344,32 @@ enum AppDiscovery {
     }
 
     private static func listedBundleIdentifier(for descriptor: RunningAppDescriptor) -> String? {
-        if let bundleIdentifier = descriptor.bundleIdentifier, !bundleIdentifier.isEmpty {
+        listBundleIdentifier(
+            name: descriptor.name,
+            executableName: descriptor.runningApplication.executableURL?.deletingPathExtension().lastPathComponent,
+            bundleIdentifier: descriptor.bundleIdentifier
+        )
+    }
+
+    /// Pure identity resolution behind the list/dedup key. A bare-exec fixture launched
+    /// under an app-style parent (agent shells, some CI runners) inherits that parent's
+    /// LaunchServices identity — both `localizedName` and `bundleIdentifier` come back as
+    /// the parent's — so an executable-path match must pin the fixture's synthetic id
+    /// ahead of any inherited bundle identifier.
+    static func listBundleIdentifier(name: String, executableName: String?, bundleIdentifier: String?) -> String? {
+        if isFixtureListName(name: name, executableName: executableName) {
+            return fixtureListBundleIdentifier
+        }
+
+        if let bundleIdentifier, !bundleIdentifier.isEmpty {
             return bundleIdentifier
         }
 
-        guard descriptor.name == FixtureBridge.appName else {
-            return nil
-        }
+        return nil
+    }
 
-        return fixtureListBundleIdentifier
+    static func isFixtureListName(name: String, executableName: String?) -> Bool {
+        name == FixtureBridge.appName || executableName == FixtureBridge.appName
     }
 
     static func compareListedApps(_ lhs: ListedAppDescriptor, _ rhs: ListedAppDescriptor) -> Bool {
@@ -499,11 +516,19 @@ enum AppDiscovery {
     }
 
     private static func isUserFacingListApp(_ app: NSRunningApplication) -> Bool {
-        if appName(app) == FixtureBridge.appName {
+        isUserFacingListApp(
+            name: appName(app),
+            executableName: app.executableURL?.deletingPathExtension().lastPathComponent,
+            activationPolicy: app.activationPolicy
+        )
+    }
+
+    static func isUserFacingListApp(name: String, executableName: String?, activationPolicy: NSApplication.ActivationPolicy) -> Bool {
+        if isFixtureListName(name: name, executableName: executableName) {
             return true
         }
 
-        return app.activationPolicy == .regular
+        return activationPolicy == .regular
     }
 
     private static func bundleDisplayName(_ bundle: Bundle?) -> String? {
