@@ -3,7 +3,7 @@
   "name": "io.github.AntonKhakhalin/open-computer-use",
   "title": "Open Computer Use (AntonKhakhalin fork)",
   "description": "Local desktop computer use for AI agents with exact macOS window targeting. Fork of opensymph.",
-  "version": "1.2.1-anton.2",
+  "version": "1.2.1-anton.3",
   "websiteUrl": "https://github.com/AntonKhakhalin/open-computer-use",
   "repository": {
     "source": "github",
@@ -13,7 +13,7 @@
     {
       "registryType": "npm",
       "identifier": "@khakhalin/open-computer-use",
-      "version": "1.2.1-anton.2",
+      "version": "1.2.1-anton.3",
       "transport": {
         "type": "stdio"
       },

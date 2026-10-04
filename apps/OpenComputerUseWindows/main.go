@@ -15,7 +15,7 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-var version = "1.2.1-anton.2"
+var version = "1.2.1-anton.3"
 
 var clickMethodValues = []string{"auto", "accessibility", "app_post", "sky_click", "global"}
 
