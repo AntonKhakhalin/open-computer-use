@@ -1,5 +1,11 @@
 # Feature Release Notes
 
+## 2026-10
+
+| Date | Feature area | User value | Change summary |
+| --- | --- | --- | --- |
+| 2026-10-03 | macOS single-process runtime (`feat/macos-in-process-default`, unreleased) | macOS no longer runs a background helper agent + unix socket: the MCP server and CLI execute automation directly in the launched in-bundle binary, which carries the same `Open Computer Use.app` TCC identity. This eliminates the stale-agent failure class (`Open Computer Use.app agent closed the connection`, orphaned agents holding the socket for days) and removes the shim/agent version-skew and dual permission-merge surface. | Flipped `shouldUseMacOSAppAgentProxy` from default-on/opt-out to opt-in (`OPEN_COMPUTER_USE_AGENT_PROXY=1`; deprecated `OPEN_COMPUTER_USE_DISABLE_APP_AGENT_PROXY=1` kept as force-off guard); `OpenComputerUseMain` `mcp` gained a one-shot stderr permission warning (stdout stays pure JSON-RPC, no TCC prompt); decision matrix pinned by updated unit tests (`OpenComputerUseKitTests` / `DesktopCommandTests`) incl. a default-in-process test; smoke suite now pins in-process by removing agent-proxy opt-in from the environment; permission-onboarding E2E pins the in-process default and opts into the legacy proxy only on explicit request; design record `docs/design-docs/macos-in-process-default.md`; ARCHITECTURE + skill troubleshooting (both copies) synced; live verification: in-bundle Dev binary served `initialize`/`doctor`/Finder AX snapshot in-process with zero agent processes and no socket created. |
+
 ## 2026-09
 
 | Date | Feature area | User value | Change summary |

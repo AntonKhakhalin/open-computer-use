@@ -672,7 +672,10 @@ enum OpenComputerUseSmokeSuite {
 
     private static func smokeServerEnvironment() -> [String: String] {
         var environment = ProcessInfo.processInfo.environment
-        environment["OPEN_COMPUTER_USE_DISABLE_APP_AGENT_PROXY"] = "1"
+        // Pin the default contract: the smoke suite runs the MCP server
+        // in-process, so an opted-in legacy agent proxy in the caller's
+        // environment must not change that.
+        environment.removeValue(forKey: "OPEN_COMPUTER_USE_AGENT_PROXY")
         return environment
     }
 

@@ -104,6 +104,13 @@ If desktop access is missing, ask the user to run the command from the logged-in
 
 If a Linux release reports that `Accessible` has no `is_text` or `is_editable_text` attribute, upgrade to a release containing the AT-SPI interface-detection fix. Current source checks the object's AT-SPI interface list for `Text` and `EditableText`, which works with the AT-SPI2 stack shipped by Ubuntu 24.04.
 
+## "Open Computer Use.app agent closed the connection" (macOS)
+
+This error comes from the legacy two-process mode, where the CLI/MCP shim forwarded requests to a hidden background `Open Computer Use.app` agent over a unix socket and that agent went stale or exited. Current builds run all automation in-process by default, so this error should not occur:
+
+1. If it still occurs, remove `OPEN_COMPUTER_USE_AGENT_PROXY=1` (the opt-in to the legacy proxy) from the MCP host environment.
+2. If legacy proxy mode is explicitly required, delete the stale socket file `open-computer-use-agent.sock` under the user temp directory and kill any leftover `__open-computer-use-app-agent` processes; the next invocation launches a fresh agent.
+
 ## Permission And Safety Issues
 
 - Do not bypass macOS TCC prompts.

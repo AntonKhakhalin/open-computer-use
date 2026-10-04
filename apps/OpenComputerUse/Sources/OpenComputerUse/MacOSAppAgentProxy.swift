@@ -4,6 +4,9 @@ import Foundation
 import OpenComputerUseKit
 
 private let appAgentCommand = "__open-computer-use-app-agent"
+private let appAgentProxyEnvironmentKey = "OPEN_COMPUTER_USE_AGENT_PROXY"
+// Deprecated opt-out of the legacy proxy mode; kept so existing setups that
+// set it keep working unchanged (in-process is the default anyway now).
 private let appAgentDisableEnvironmentKey = "OPEN_COMPUTER_USE_DISABLE_APP_AGENT_PROXY"
 private let appAgentProcessStartDate = Date()
 
@@ -24,7 +27,7 @@ enum MacOSAppAgentProxy {
     static func shouldProxy(command: OpenComputerUseCLICommand) -> Bool {
         shouldUseMacOSAppAgentProxy(
             command: command,
-            proxyDisabled: proxyDisabled,
+            proxyEnabled: agentProxyEnabledByEnvironment,
             appBundleAvailable: PermissionSupport.currentAppBundleURL() != nil,
             runningFromLaunchServicesAppInstance: isRunningFromLaunchServicesAppInstance
         )
@@ -51,9 +54,21 @@ enum MacOSAppAgentProxy {
         }
     }
 
-    private static var proxyDisabled: Bool {
-        let value = ProcessInfo.processInfo.environment[appAgentDisableEnvironmentKey]?.lowercased()
-        return value == "1" || value == "true" || value == "yes" || value == "on"
+    private static var agentProxyEnabledByEnvironment: Bool {
+        let environment = ProcessInfo.processInfo.environment
+        if isTruthyEnvironmentValue(environment[appAgentDisableEnvironmentKey]) {
+            return false
+        }
+        return isTruthyEnvironmentValue(environment[appAgentProxyEnvironmentKey])
+    }
+
+    private static func isTruthyEnvironmentValue(_ value: String?) -> Bool {
+        switch value?.lowercased() {
+        case "1", "true", "yes", "on":
+            return true
+        default:
+            return false
+        }
     }
 
     private static var isRunningFromOpenComputerUseAppBundle: Bool {
