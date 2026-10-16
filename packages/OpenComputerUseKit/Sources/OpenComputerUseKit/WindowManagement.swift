@@ -362,8 +362,9 @@ enum WindowDirectory {
     /// CGWindowID. `.confirmed` on an exact match, `.absent` when the list
     /// was read completely and nothing matched (the window is closed and
     /// only its CG entry lingers), `.indeterminate` whenever any step of the
-    /// check is unavailable (missing private symbol, no AX window list, or a
-    /// window that cannot be mapped) — indeterminate never rejects.
+    /// check is unavailable (missing private symbol, no or empty AX window
+    /// list, a window that cannot be mapped, or a window that is not on the
+    /// current Space) — indeterminate never rejects.
     static func windowIdentity(pid: pid_t, windowID: CGWindowID) -> WindowIdentity {
         guard AXWindowIdentitySPI.shared.isAvailable else {
             return .indeterminate
@@ -374,6 +375,7 @@ enum WindowDirectory {
             return .indeterminate
         }
 
+        var mappedIDs: [CGWindowID?] = []
         for element in windows {
             // Real windows carry CGWindowIDs; skip anything provably not a
             // window, but attempt the mapping when the role is unreadable so
@@ -384,12 +386,28 @@ enum WindowDirectory {
                 continue
             }
 
-            guard let mapped = AXWindowIdentitySPI.shared.windowID(for: element) else {
-                return .indeterminate
-            }
-            if mapped == windowID {
-                return .confirmed
-            }
+            mappedIDs.append(AXWindowIdentitySPI.shared.windowID(for: element))
+        }
+
+        // `kAXWindowsAttribute` only lists windows on the current Space, so a
+        // window that is not on-screen here cannot be proven closed.
+        let isOnCurrentSpace = listEntries(onScreenOnly: true).contains(where: { $0.windowID == windowID })
+        return identityVerdict(mappedIDs: mappedIDs, windowID: windowID, isOnCurrentSpace: isOnCurrentSpace)
+    }
+
+    /// Pure verdict for the AX-identity check. `mappedIDs` holds the mapped
+    /// CGWindowID of every AX window element (`nil` = could not be mapped).
+    /// `.absent` is only returned when the window is provably gone: the AX
+    /// list is non-empty and fully mapped, nothing matches, and the CG entry
+    /// is on the current Space (other Spaces and full-screen Spaces are
+    /// invisible to `kAXWindowsAttribute`).
+    static func identityVerdict(mappedIDs: [CGWindowID?], windowID: CGWindowID, isOnCurrentSpace: Bool) -> WindowIdentity {
+        if mappedIDs.contains(where: { $0 == windowID }) {
+            return .confirmed
+        }
+
+        guard !mappedIDs.isEmpty, !mappedIDs.contains(where: { $0 == nil }), isOnCurrentSpace else {
+            return .indeterminate
         }
 
         return .absent

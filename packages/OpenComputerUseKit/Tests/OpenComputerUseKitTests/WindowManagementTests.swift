@@ -1004,6 +1004,20 @@ final class WindowManagementTests: XCTestCase {
         }
     }
 
+    func testIdentityVerdictOnlyReportsAbsentWhenProvablyClosed() {
+        let target: CGWindowID = 42
+        typealias Directory = WindowDirectory
+
+        XCTAssertEqual(Directory.identityVerdict(mappedIDs: [7, 42], windowID: target, isOnCurrentSpace: false), .confirmed)
+        XCTAssertEqual(Directory.identityVerdict(mappedIDs: [7, 8], windowID: target, isOnCurrentSpace: true), .absent)
+        // Empty AX list: no conclusion.
+        XCTAssertEqual(Directory.identityVerdict(mappedIDs: [], windowID: target, isOnCurrentSpace: true), .indeterminate)
+        // Other Space / full-screen Space: AX cannot see the window.
+        XCTAssertEqual(Directory.identityVerdict(mappedIDs: [7, 8], windowID: target, isOnCurrentSpace: false), .indeterminate)
+        // Unmappable window in the list: no conclusion.
+        XCTAssertEqual(Directory.identityVerdict(mappedIDs: [7, nil], windowID: target, isOnCurrentSpace: true), .indeterminate)
+    }
+
     func testStaleAndInvalidWindowIDsAreRejected() throws {
         let fixture = try requireLiveFixture()
         defer { fixture.terminate() }
