@@ -90,7 +90,7 @@ enum WindowArgumentParsing {
             guard id > 0 else {
                 return nil
             }
-            return WindowRef(app: "", id: CGWindowID(id), title: nil)
+            return WindowRef(app: "", id: try windowID(from: id), title: nil)
         }
 
         guard let raw = arguments["window"], !(raw is NSNull) else {
@@ -108,7 +108,18 @@ enum WindowArgumentParsing {
             throw ComputerUseError.message("window.id must be an integer >= 0")
         }
 
-        return WindowRef(app: app, id: CGWindowID(id), title: title)
+        return WindowRef(app: app, id: try windowID(from: id), title: title)
+    }
+
+    // CGWindowID is UInt32; `CGWindowID(id)` would trap (crashing the whole
+    // server) for larger values. No such window can exist, so report it as stale.
+    private static func windowID(from id: Int) throws -> CGWindowID {
+        guard let windowID = CGWindowID(exactly: id) else {
+            throw ComputerUseError.message(
+                "staleWindowHandle(\(id)): the window is no longer open; re-observe with list_windows."
+            )
+        }
+        return windowID
     }
 
     static func required(_ arguments: [String: Any]) throws -> WindowRef? {

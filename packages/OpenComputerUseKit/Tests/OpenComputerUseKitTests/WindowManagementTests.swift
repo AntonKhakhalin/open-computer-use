@@ -984,6 +984,26 @@ final class WindowManagementTests: XCTestCase {
         XCTAssertEqual(payload?["id"] as? Int, Int(mainID))
     }
 
+    func testOutOfRangeWindowIDsAreRejectedWithoutTrapping() {
+        let dispatcher = ComputerUseToolDispatcher()
+        let tooLarge = Int(UInt32.max) + 1
+        let cases: [[String: Any]] = [
+            ["window": ["id": 5_000_000_000]],
+            ["window": ["id": "99999999999"]],
+            ["window_id": 5_000_000_000],
+            ["window_id": "99999999999"],
+            ["window": ["id": tooLarge]],
+        ]
+        for arguments in cases {
+            let result = dispatcher.callToolAsResult(name: "get_window", arguments: arguments)
+            XCTAssertTrue(result.isError, "\(arguments) must fail instead of trapping")
+            XCTAssertTrue(
+                result.primaryText?.hasPrefix("staleWindowHandle(") == true,
+                "\(arguments) should report a stale handle, got: \(result.primaryText ?? "")"
+            )
+        }
+    }
+
     func testStaleAndInvalidWindowIDsAreRejected() throws {
         let fixture = try requireLiveFixture()
         defer { fixture.terminate() }
