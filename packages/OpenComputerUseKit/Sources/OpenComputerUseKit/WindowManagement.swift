@@ -475,7 +475,7 @@ enum WindowDirectory {
     /// first: when the private AX→CGWindowID mapping is available and any
     /// candidate maps to exactly the entry's id, that window is the match
     /// regardless of geometry (same-bounds windows are unambiguous).
-    /// Otherwise frame geometry with title/focused tie-breakers; several
+    /// Otherwise frame geometry with a unique-title tie-breaker; several
     /// same-bounds candidates with no unique tie-break report
     /// `.ambiguous` rather than returning the first candidate.
     static func matchAXWindow(appElement: AXUIElement, entry: CGWindowEntry) -> AXWindowMatch {
@@ -483,8 +483,7 @@ enum WindowDirectory {
             return .notFound
         }
 
-        let focused = axElement(of: appElement, attribute: kAXFocusedWindowAttribute as String)
-        let candidates: [(element: AXUIElement, frame: CGRect, title: String?, isFocused: Bool)] = windows.compactMap { element in
+        let candidates: [(element: AXUIElement, frame: CGRect, title: String?)] = windows.compactMap { element in
             guard
                 axString(of: element, attribute: kAXRoleAttribute as String) == kAXWindowRole as String,
                 let frame = axFrame(of: element)
@@ -495,8 +494,7 @@ enum WindowDirectory {
             return (
                 element: element,
                 frame: frame,
-                title: axString(of: element, attribute: kAXTitleAttribute as String),
-                isFocused: focused != nil && CFEqual(element, focused)
+                title: axString(of: element, attribute: kAXTitleAttribute as String)
             )
         }
 
@@ -535,14 +533,17 @@ enum WindowDirectory {
 
         let frameMatches = candidates.filter { frameMatches($0.frame) }
         if !frameMatches.isEmpty {
-            if let titled = frameMatches.first(where: { entry.title?.isEmpty == false && $0.title == entry.title }) {
-                return .matched(titled.element)
-            }
-            if let focusedMatch = frameMatches.first(where: { $0.isFocused }) {
-                return .matched(focusedMatch.element)
-            }
             if frameMatches.count == 1 {
-                return .matched(frameMatches.first!.element)
+                return .matched(frameMatches[0].element)
+            }
+            // Several same-bounds windows: only a unique title match is
+            // positive evidence. Focus is not (it says which window is
+            // focused, not which one is the target).
+            if let title = entry.title, !title.isEmpty {
+                let titled = frameMatches.filter { $0.title == title }
+                if titled.count == 1 {
+                    return .matched(titled[0].element)
+                }
             }
             return .ambiguous(count: frameMatches.count)
         }
