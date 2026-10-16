@@ -201,6 +201,9 @@ enum WindowDirectory {
     static func listWindows() -> [WindowRef] {
         listEntries(onScreenOnly: true)
             .filter { $0.layer == 0 && $0.bounds.width > 0 && $0.bounds.height > 0 }
+            // Deny-listed apps (password managers) must not leak window
+            // titles through the enumeration either.
+            .filter { !AppSafetyPolicy.isBlocked(bundleIdentifier: NSRunningApplication(processIdentifier: $0.ownerPID)?.bundleIdentifier) }
             .map { entry in
                 WindowRef(
                     app: ownerName(for: entry.ownerPID),
