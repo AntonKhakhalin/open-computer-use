@@ -72,6 +72,18 @@ final class LaunchAppTests: XCTestCase {
         }
     }
 
+    func testLaunchBlockedBundleIdentifierIsDeniedCaseInsensitively() {
+        for query in ["COM.1PASSWORD.1PASSWORD", "com.lastpass.lastpass", "com.lastpass.LastPass"] {
+            XCTAssertThrowsError(try AppDiscovery.launch(query), query) { error in
+                XCTAssertEqual(
+                    (error as? ComputerUseError)?.errorDescription,
+                    "Computer Use is not allowed to use the app '\(query)' for safety reasons."
+                )
+            }
+        }
+        XCTAssertTrue(AppSafetyPolicy.isBlocked(bundleIdentifier: "Com.Bitwarden.Desktop"))
+    }
+
     // MARK: Real launch (requires a GUI session)
 
     func testLaunchAppByBundleIdentifierThenReusesInstanceByName() throws {
