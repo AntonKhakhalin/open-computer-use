@@ -312,7 +312,7 @@ enum WindowDirectory {
                 unminimizeIfNeeded(resolved.pid, windowID: resolved.ref.id)
             }
 
-            resolved.runningApplication.activate(options: [.activateAllWindows])
+            resolved.runningApplication.activate(options: [])
 
             if targetWindow == nil {
                 appElement = AXUIElementCreateApplication(resolved.pid)
@@ -413,21 +413,24 @@ enum WindowDirectory {
         return .absent
     }
 
+    /// Success requires both that the owning app is frontmost and that the
+    /// target window is the app's focused (or main) window. Without a
+    /// resolved AX target window there is nothing to verify, so it fails.
     static func isFrontmost(_ pid: pid_t, focusedWindow: AXUIElement?) -> Bool {
-        if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid {
-            return true
-        }
-
-        guard let focusedWindow else {
+        guard NSWorkspace.shared.frontmostApplication?.processIdentifier == pid,
+              let focusedWindow
+        else {
             return false
         }
 
         let appElement = AXUIElementCreateApplication(pid)
-        guard let appFocused = axElement(of: appElement, attribute: kAXFocusedWindowAttribute as String) else {
-            return false
+        for attribute in [kAXFocusedWindowAttribute as String, kAXMainWindowAttribute as String] {
+            if let candidate = axElement(of: appElement, attribute: attribute), CFEqual(candidate, focusedWindow) {
+                return true
+            }
         }
 
-        return CFEqual(appFocused, focusedWindow)
+        return false
     }
 
     private static func unminimizeIfNeeded(_ pid: pid_t, windowID: CGWindowID) {
