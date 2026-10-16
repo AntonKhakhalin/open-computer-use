@@ -233,7 +233,11 @@ enum AppDiscovery {
             semaphore.signal()
         }
 
-        waitForSignal(semaphore)
+        guard waitForSignal(semaphore) else {
+            throw ComputerUseError.message(
+                "launchFailed(\"\(normalizedQuery)\"): timed out waiting for LaunchServices"
+            )
+        }
 
         if let launchError = launchedBox.error {
             throw ComputerUseError.message(
@@ -255,11 +259,9 @@ enum AppDiscovery {
         // Give the app a brief moment to create its first window so the
         // response can report available windows; windowless apps are still
         // a successful launch (the windows list simply stays empty).
-        for _ in 0..<25 {
-            if !windows(for: descriptor.pid).isEmpty {
-                break
-            }
-            Thread.sleep(forTimeInterval: 0.1)
+        let windowDeadline = Date(timeIntervalSinceNow: 2.5)
+        while windows(for: descriptor.pid).isEmpty, Date() < windowDeadline {
+            pause(0.1)
         }
 
         return launchResult(for: descriptor, reusedExistingInstance: false)
@@ -462,22 +464,44 @@ enum AppDiscovery {
             semaphore.signal()
         }
 
-        waitForSignal(semaphore)
+        guard waitForSignal(semaphore) else {
+            throw ComputerUseError.message(
+                "launchFailed(\"\(appURL.lastPathComponent)\"): timed out waiting for LaunchServices"
+            )
+        }
 
         if let launchError = errorBox.error {
             throw launchError
         }
     }
 
-    private static func waitForSignal(_ semaphore: DispatchSemaphore) {
+    private static let launchServicesTimeout: TimeInterval = 20
+
+    /// Returns false when LaunchServices did not call back before the timeout,
+    /// so a stuck launch cannot block the serial MCP server forever.
+    @discardableResult
+    private static func waitForSignal(_ semaphore: DispatchSemaphore, timeout: TimeInterval = launchServicesTimeout) -> Bool {
+        let deadline = Date(timeIntervalSinceNow: timeout)
+
         if Thread.isMainThread {
             while semaphore.wait(timeout: .now()) == .timedOut {
+                if Date() >= deadline {
+                    return false
+                }
                 RunLoop.current.run(mode: .default, before: Date(timeIntervalSinceNow: 0.01))
             }
-            return
+            return true
         }
 
-        semaphore.wait()
+        return semaphore.wait(timeout: .now() + timeout) == .success
+    }
+
+    private static func pause(_ interval: TimeInterval) {
+        if Thread.isMainThread {
+            RunLoop.current.run(mode: .default, before: Date(timeIntervalSinceNow: interval))
+        } else {
+            Thread.sleep(forTimeInterval: interval)
+        }
     }
 
     private final class LaunchErrorBox: @unchecked Sendable {
