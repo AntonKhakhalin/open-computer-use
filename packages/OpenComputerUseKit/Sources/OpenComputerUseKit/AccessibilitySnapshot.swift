@@ -208,7 +208,9 @@ enum SnapshotBuilder {
         )
     }
 
-    /// window2 variant of `build`: targets an exact CGWindowID instead of
+    /// window2 variant of `build` (observation never restores minimized
+    /// windows or activates the app; that is `activate_window`'s job):
+    /// targets an exact CGWindowID instead of
     /// the app's focused window, renders only that window (no menu bar),
     /// and captures a screenshot only when `includeScreenshot` is true.
     /// CGWindowIDs are never invented — they come from the live window
@@ -218,7 +220,7 @@ enum SnapshotBuilder {
         includeScreenshot: Bool,
         textLimit: SnapshotTextLimit = .defaults,
         treeLimits: AccessibilityTreeLimits = .defaults,
-        recoveryPolicy: SnapshotRecoveryPolicy = .allowActivation
+        recoveryPolicy: SnapshotRecoveryPolicy = .readOnly
     ) throws -> AppSnapshot {
         let app = RunningAppDescriptor(
             name: resolved.ref.app,

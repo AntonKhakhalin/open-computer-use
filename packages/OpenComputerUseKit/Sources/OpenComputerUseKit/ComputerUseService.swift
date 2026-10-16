@@ -651,7 +651,8 @@ public final class ComputerUseService {
             for: resolved,
             includeScreenshot: includeScreenshot,
             textLimit: textLimit,
-            treeLimits: treeLimits
+            treeLimits: treeLimits,
+            recoveryPolicy: .readOnly
         )
 
         // Cache the observation for window-targeted action tools (the PNG is
@@ -766,7 +767,7 @@ public final class ComputerUseService {
         for resolved: ResolvedWindow,
         textLimit: SnapshotTextLimit = .defaults,
         treeLimits: AccessibilityTreeLimits = .defaults,
-        recoveryPolicy: SnapshotRecoveryPolicy = .allowActivation
+        recoveryPolicy: SnapshotRecoveryPolicy = .readOnly
     ) throws -> AppSnapshot {
         let fresh = try WindowDirectory.resolve(id: resolved.ref.id)
         let snapshot = try SnapshotBuilder.buildWindow(
@@ -783,7 +784,7 @@ public final class ComputerUseService {
     /// Shared tail for window-targeted actions: invalidate the observation
     /// binding (the successful action makes any cached screenshot id stale),
     /// refresh the window snapshot, and render the action result.
-    private func windowActionResult(for resolved: ResolvedWindow, recoveryPolicy: SnapshotRecoveryPolicy = .allowActivation) throws -> ToolCallResult {
+    private func windowActionResult(for resolved: ResolvedWindow, recoveryPolicy: SnapshotRecoveryPolicy = .readOnly) throws -> ToolCallResult {
         invalidateWindowScreenshot(for: resolved.ref.id)
         let snapshot = try refreshWindowSnapshot(for: resolved, recoveryPolicy: recoveryPolicy)
         return snapshotResult(for: snapshot, style: .actionResult)
@@ -886,10 +887,7 @@ public final class ComputerUseService {
         invalidateWindowScreenshot(for: resolved.ref.id)
 
         return snapshotResult(
-            for: try refreshWindowSnapshot(
-                for: resolved,
-                recoveryPolicy: clickActionSnapshotRecoveryPolicy(for: clickMethod)
-            ),
+            for: try refreshWindowSnapshot(for: resolved, recoveryPolicy: .readOnly),
             style: .actionResult
         )
     }
