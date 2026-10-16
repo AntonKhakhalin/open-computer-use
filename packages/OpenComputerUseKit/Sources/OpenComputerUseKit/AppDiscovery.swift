@@ -194,6 +194,10 @@ enum AppDiscovery {
         }
 
         if let running = resolvedRunningApp(in: runningApps(), matching: normalizedQuery) {
+            // Defense in depth: re-check the resolved instance's real bundle id.
+            if AppSafetyPolicy.isBlocked(bundleIdentifier: running.bundleIdentifier) {
+                throw AppSafetyPolicy.permissionDenied(bundleIdentifier: running.bundleIdentifier ?? normalizedQuery)
+            }
             return launchResult(for: running, reusedExistingInstance: true)
         }
 
@@ -645,7 +649,7 @@ enum AppSafetyPolicy {
         "com.1password.safari",
         "com.bitwarden.desktop",
         "com.dashlane.dashlanephonefinal",
-        "com.lastpass.LastPass",
+        "com.lastpass.lastpass",
         "com.nordsec.nordpass",
         "me.proton.pass.electron",
         "me.proton.pass.catalyst",
@@ -656,7 +660,7 @@ enum AppSafetyPolicy {
             return false
         }
 
-        return blockedBundleIdentifiers.contains(bundleIdentifier)
+        return blockedBundleIdentifiers.contains(bundleIdentifier.lowercased())
     }
 
     static func permissionDenied(bundleIdentifier: String) -> ComputerUseError {
