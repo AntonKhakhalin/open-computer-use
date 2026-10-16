@@ -84,6 +84,18 @@ final class LaunchAppTests: XCTestCase {
         XCTAssertTrue(AppSafetyPolicy.isBlocked(bundleIdentifier: "Com.Bitwarden.Desktop"))
     }
 
+    func testLaunchRejectsNonApplicationAndRelativePaths() {
+        for query in ["/tmp", "/etc/hosts", "relative/path/Foo.app", "/tmp/definitely-not-an-app.txt"] {
+            XCTAssertThrowsError(try AppDiscovery.launch(query), query) { error in
+                let description = (error as? ComputerUseError)?.errorDescription ?? ""
+                XCTAssertTrue(
+                    description.hasPrefix("invalidArguments(") || description.hasPrefix("appNotFound("),
+                    "\(query) should be rejected, got: \(description)"
+                )
+            }
+        }
+    }
+
     // MARK: Real launch (requires a GUI session)
 
     func testLaunchAppByBundleIdentifierThenReusesInstanceByName() throws {
