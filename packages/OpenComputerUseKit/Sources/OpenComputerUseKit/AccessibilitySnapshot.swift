@@ -317,7 +317,8 @@ enum SnapshotBuilder {
             systemWide: systemWide,
             textLimit: textLimit,
             treeLimits: treeLimits,
-            renderMenuBar: false
+            renderMenuBar: false,
+            restrictFocusToRoot: true
         )
     }
 
@@ -331,11 +332,21 @@ enum SnapshotBuilder {
         systemWide: AXUIElement,
         textLimit: SnapshotTextLimit,
         treeLimits: AccessibilityTreeLimits,
-        renderMenuBar: Bool = true
+        renderMenuBar: Bool = true,
+        restrictFocusToRoot: Bool = false
     ) -> AppSnapshot {
         let windowBounds = windowCapture.bounds
         let screenshotPNGData = windowCapture.pngDataIfAvailable()
-        let focusedElement = preferredFocusedElement(appElement: appElement, appPID: app.pid, focusedApplication: focusedApplication, systemWide: systemWide)
+        var focusedElement = preferredFocusedElement(appElement: appElement, appPID: app.pid, focusedApplication: focusedApplication, systemWide: systemWide)
+        // The app-level focused element can live in a sibling window of the
+        // same app; a window snapshot must never expose (or let type_text
+        // write into) another window's element.
+        if restrictFocusToRoot, let focused = focusedElement, !CFEqual(focused, rootElement) {
+            let owningWindow = copyElement(focused, attribute: kAXWindowAttribute)
+            if !(owningWindow.map { CFEqual($0, rootElement) } ?? false) {
+                focusedElement = nil
+            }
+        }
         let selectedText = focusedElement.flatMap { copySelectedText($0, textLimit: textLimit) }
         let context = RenderContext(
             windowBounds: windowBounds,
