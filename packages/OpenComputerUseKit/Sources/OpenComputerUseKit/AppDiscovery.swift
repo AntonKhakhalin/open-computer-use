@@ -198,6 +198,12 @@ enum AppDiscovery {
             if AppSafetyPolicy.isBlocked(bundleIdentifier: running.bundleIdentifier) {
                 throw AppSafetyPolicy.permissionDenied(bundleIdentifier: running.bundleIdentifier ?? normalizedQuery)
             }
+            // Re-open through LaunchServices so a running app with no windows
+            // receives a reopen event (like `open -a`), still without activating it.
+            if let bundleURL = running.runningApplication.bundleURL {
+                try openApplication(at: bundleURL, activates: false, name: normalizedQuery)
+                waitForFirstWindow(pid: running.pid)
+            }
             return launchResult(for: running, reusedExistingInstance: true)
         }
 
@@ -236,13 +242,7 @@ enum AppDiscovery {
             runningApplication: application
         )
 
-        // Give the app a brief moment to create its first window so the
-        // response can report available windows; windowless apps are still
-        // a successful launch (the windows list simply stays empty).
-        let windowDeadline = Date(timeIntervalSinceNow: 2.5)
-        while windows(for: descriptor.pid).isEmpty, Date() < windowDeadline {
-            pause(0.1)
-        }
+        waitForFirstWindow(pid: descriptor.pid)
 
         return launchResult(for: descriptor, reusedExistingInstance: false)
     }
@@ -267,6 +267,16 @@ enum AppDiscovery {
         }
 
         return url
+    }
+
+    // Give the app a brief moment to create its first window so the response
+    // can report available windows; windowless apps are still a successful
+    // launch (the windows list simply stays empty).
+    private static func waitForFirstWindow(pid: pid_t) {
+        let windowDeadline = Date(timeIntervalSinceNow: 2.5)
+        while windows(for: pid).isEmpty, Date() < windowDeadline {
+            pause(0.1)
+        }
     }
 
     private static func launchResult(for descriptor: RunningAppDescriptor, reusedExistingInstance: Bool) -> AppLaunchResult {
