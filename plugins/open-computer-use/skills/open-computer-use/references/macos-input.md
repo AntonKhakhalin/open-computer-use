@@ -2,15 +2,15 @@
 
 Read this reference when a macOS task involves keyboard input (`press_key`, `type_text`, `set_value`) or driving background windows, and you want to choose the reliable path up front instead of trial and error.
 
-All findings below were characterized on a macOS 27 dev machine in controlled re-tests: a dedicated TextEdit rig (eventually fully hidden), per-trial frontmost-app logging, and a before/after text diff as the delivery oracle — 46 verified trials across 11 runs. The numbers describe an observed condition, not a universal guarantee; re-validate on a new machine or OS version.
+The findings below were characterized on a single macOS 27 dev machine (see `docs/design-docs/macos-input-delivery-research.md` for the trial record). They describe an observed condition, not a universal guarantee; re-validate on a new machine or OS version.
 
 ## Choosing the Input Path (reliability order)
 
 1. **`type_text` on an editable element** — first choice for putting text into a document or field. When the element exposes a settable `AXValue`, the runtime uses the AX value-write path, which works on background windows and is independent of user activity. Some apps (e.g. terminals) do not expose a settable text value; for those, `type_text` falls back to keyboard input, which is subject to the conditions in item 4.
 2. **`set_value` on a settable control** — AX value write; activity-independent and background-safe.
-3. **Menu commands via `perform_secondary_action` (`AXPress`)** — the macOS `get_app_state` tree includes the menu bar (the window2 `get_window_state` tree does not). `AXPress` on a menu item element executes the command without activation and is activity-independent — verified working in the background. First choice for menu commands, and consistent with the Windows/Meta-key safety policy.
+3. **Menu commands via `perform_secondary_action` (`AXPress`)** — the macOS `get_app_state` tree includes the menu bar (the window2 `get_window_state` tree does not). `AXPress` on a menu item element executes the command without activation and is activity-independent — verified working in the background. First choice for menu commands.
 4. **`press_key` on macOS:**
-   - Chords containing `cmd` (`cmd+n`, `cmd+s`, …): the macOS runtime accepts them and they delivered in every observed condition, including to background apps. (The Windows runtime rejects Windows/Meta key chords per the official safety policy.)
+   - Chords containing `cmd` (`cmd+n`, `cmd+s`, …): the macOS runtime accepts them and they delivered in every observed condition, including to background apps. Destructive chords (`cmd+q`, `cmd+w`, …) fall under the usual rule of asking the user before destructive actions; prefer the menu `AXPress` path. (The Windows runtime rejects Windows/Meta key chords outright.)
    - Plain unmodified keys (`a`, `Return`, …): app-targeted (pid-targeted) posting. Delivered when the user's real input is quiet — idle, reading, browsing: 28/28. **Dropped while the user is actively typing: 0/14.** Window state is not a variable: foreground or background, visible or hidden, any frontmost app (Safari, ChatGPT, Finder), recently activated or not — all deliver when input is quiet.
    - Flagged single keys (`shift+a`): context-dependent — delivered under a launchd (LaunchAgent) context, dropped from the interactive shell context on the test machine. Not a primary path.
 5. **Do not use as a primary path:** the gated global-HID `input` path — dropped in every observed condition (the post succeeds, the key never lands). A separate event-source/shape issue, not the activity effect.
@@ -27,27 +27,13 @@ All findings below were characterized on a macOS 27 dev machine in controlled re
 ## Driving Background Apps Without Disturbing the User
 
 - These work without activation (no focus steal): element clicks, `set_value`, `type_text` (AX path), `perform_secondary_action` (`AXPress`), and app-targeted `press_key` (subject to the activity condition above).
-- `activate_window` / any activation is visible to the user; use it only when the task requires the foreground, and return focus to the user's app when done.
+- `activate_window` / any activation is visible to the user; use it only when the task requires the foreground, and return focus to the user's app when done. It reports success only when the app is frontmost and the target window is its focused or main window; on macOS 14+ activation is cooperative, so the system may decline a request issued from a background process.
+- `get_window_state` and the post-action refresh are read-only: they never restore minimized windows or activate the app. Only `activate_window` does that.
 - Minimized windows still resolve, observe, and accept `set_value`; key-event input was not characterized for minimized windows — restore to visible before relying on it.
 
-## Creating a Window in the Background Without a Visible Pop-Up
+## Creating Windows
 
-- A new window of a background app is ordered to the front of the global window stack at creation. On macOS 27 the private SkyLight reordering/leveling APIs (`SLSOrderWindow`, `SLSSetWindowLevel`) are **silently ignored** from CLI processes — the window server honors them only from the owning app's process — so another app's windows cannot be reordered from outside.
-- Verified recipe (imperceptible over multiple runs): create and hide in **one** AppleScript call, so the window exists for ~1–3 frames before the app becomes fully invisible:
-
-  ```sh
-  osascript -e 'tell application "TextEdit" to make new document' \
-            -e 'tell application "System Events" to tell process "TextEdit" to set visible to false'
-  ```
-
-  Key delivery to the hidden app still works. To make the window visible again without stealing focus:
-
-  ```sh
-  osascript -e 'tell application "System Events" to tell process "TextEdit" to set visible to true'
-  ```
-
-- Creating a document while the app is already hidden is **not** invisible: creation unhides the app and fronts the new window. Hide after creating, never before.
-- TextEdit quirk: a document created while the app is hidden is **not** `document 1`. When multiple documents exist, reference documents by name (`set name of …`, `close (first document whose name is …)`), never by index.
+- A new window of a background app is ordered to the front of the global window stack at creation, and it cannot be reordered from outside the owning app. Do not script AppleScript/System Events to hide the app or to make windows "imperceptible" to the user; use `launch_app` and the Computer Use tools, and accept that a new window may become visible. Ask the user first if the visible change would be disruptive.
 
 ## Environment Caveats (observed behavior, not defects)
 

@@ -59,15 +59,15 @@ Linux all five window2 tools return an explicit "not supported yet" error.
 
 ## macOS Input Delivery & Background Operation
 
-Controlled-trial findings from macOS 27 (46 trials, per-trial frontmost logging, delivery verified by before/after text diff — see [references/macos-input.md](references/macos-input.md)):
+Observed on a single macOS 27 dev machine (see [references/macos-input.md](references/macos-input.md)); re-validate on other machines:
 
 - `type_text` is the first choice for text into editable elements: when the element is settable it uses the AX value-write path, which works on background windows regardless of user activity; only unsettable elements (e.g. terminals) fall back to keyboard input.
 - Menu commands: `perform_secondary_action` (`AXPress`) on a menu item element — the macOS `get_app_state` tree includes the menu bar (the window2 `get_window_state` tree does not). It runs without activation and is activity-independent.
-- `press_key` chords containing `cmd` are accepted by the macOS runtime and delivered in every observed condition, including to background apps (the Windows/Meta-key rejection in Operating Rules applies to the Windows runtime).
+- `press_key` chords containing `cmd` are accepted by the macOS runtime and delivered in every observed condition, including to background apps. Treat destructive chords (`cmd+q`, `cmd+w`, …) as destructive actions and ask first; the Windows/Meta-key rejection in Operating Rules applies to the Windows runtime.
 - Plain unmodified `press_key` keys are delivered when the user's input is quiet but **dropped while the user is actively typing** (0/14 vs 28/28 in trials), regardless of window state (foreground/background, visible/hidden, any frontmost app). After posting one to a text target, verify by re-reading the text state; if dropped, retry after a short pause or switch to `type_text`.
 - Flagged single keys (`shift+a`) and the gated global-HID `input` path are unreliable on macOS (context-dependent / dropped in all observed conditions) — prefer the paths above.
 - Background operation without activation: element clicks, `set_value`, `type_text`, `AXPress`, and app-targeted `press_key` all work without stealing focus. Use `activate_window` only when the task requires the foreground, and return focus to the user's app afterward.
-- New windows of background apps pop to the front of the global stack at creation (macOS 27; private SkyLight reordering APIs are ignored from CLI processes). To create a window without a visible pop-up, create and hide it in one AppleScript call (`make new document` + System Events `set visible to false`); input delivery to the hidden app still works, and `set visible to true` restores without stealing focus.
+- A new window of a background app may become visible when it is created. Do not use AppleScript to hide apps or windows; use the Computer Use tools and ask the user first if a visible change would be disruptive.
 - After a binary rebuild, TCC grants can go stale per launch context (launchd silently loses Accessibility; the shell context usually keeps working). If AX behavior degrades after a rebuild, re-run from the interactive shell or re-grant before suspecting code.
 
 ## Common CLI Actions
