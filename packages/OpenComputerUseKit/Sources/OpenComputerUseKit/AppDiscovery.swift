@@ -20,7 +20,6 @@ public struct AppLaunchResult {
     public let name: String
     public let bundleIdentifier: String?
     public let windows: [AppLaunchWindow]
-    public let reusedExistingInstance: Bool
 }
 
 struct ListedAppDescriptor {
@@ -204,7 +203,7 @@ enum AppDiscovery {
                 try openApplication(at: bundleURL, activates: false, name: normalizedQuery)
                 waitForFirstWindow(pid: running.pid)
             }
-            return launchResult(for: running, reusedExistingInstance: true)
+            return launchResult(for: running)
         }
 
         let appURL: URL
@@ -242,7 +241,7 @@ enum AppDiscovery {
 
         waitForFirstWindow(pid: descriptor.pid)
 
-        return launchResult(for: descriptor, reusedExistingInstance: false)
+        return launchResult(for: descriptor)
     }
 
     // Explicit paths must be an absolute, existing `.app` application bundle.
@@ -277,13 +276,12 @@ enum AppDiscovery {
         }
     }
 
-    private static func launchResult(for descriptor: RunningAppDescriptor, reusedExistingInstance: Bool) -> AppLaunchResult {
+    private static func launchResult(for descriptor: RunningAppDescriptor) -> AppLaunchResult {
         AppLaunchResult(
             pid: descriptor.pid,
             name: descriptor.name,
             bundleIdentifier: descriptor.bundleIdentifier,
-            windows: windows(for: descriptor.pid),
-            reusedExistingInstance: reusedExistingInstance
+            windows: windows(for: descriptor.pid)
         )
     }
 
