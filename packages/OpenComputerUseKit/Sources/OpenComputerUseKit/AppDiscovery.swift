@@ -210,10 +210,8 @@ enum AppDiscovery {
         let appURL: URL
         if normalizedQuery.contains("/") {
             appURL = try validatedApplicationURL(forPath: normalizedQuery)
-        } else if isBundleIdentifierQuery(normalizedQuery) {
-            guard let resolvedURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: normalizedQuery) else {
-                throw ComputerUseError.appNotFound(normalizedQuery)
-            }
+        } else if isBundleIdentifierQuery(normalizedQuery),
+                  let resolvedURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: normalizedQuery) {
             appURL = resolvedURL
         } else if let resolvedURL = applicationURL(named: normalizedQuery) {
             appURL = resolvedURL
@@ -321,10 +319,11 @@ enum AppDiscovery {
     }
 
     private static func resolvedRunningApp(in descriptors: [RunningAppDescriptor], matching query: String) -> RunningAppDescriptor? {
-        if isBundleIdentifierQuery(query) {
-            return descriptors.first(where: { descriptor in
-                descriptor.bundleIdentifier?.caseInsensitiveCompare(query) == .orderedSame
-            })
+        if isBundleIdentifierQuery(query),
+           let match = descriptors.first(where: { descriptor in
+               descriptor.bundleIdentifier?.caseInsensitiveCompare(query) == .orderedSame
+           }) {
+            return match
         }
 
         return descriptors.first(where: { descriptor in
@@ -537,7 +536,19 @@ enum AppDiscovery {
     }
 
     private static func isBundleIdentifierQuery(_ query: String) -> Bool {
-        query.contains(".")
+        guard query.contains(".") else {
+            return false
+        }
+
+        // "TextEdit.app" and names with spaces are application names, not bundle ids.
+        if query.lowercased().hasSuffix(".app") {
+            return false
+        }
+
+        let allowed = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-.")
+        return query.unicodeScalars.allSatisfy { allowed.contains($0) }
+            && !query.hasPrefix(".")
+            && !query.hasSuffix(".")
     }
 
     private static func isUserFacingListApp(_ app: NSRunningApplication) -> Bool {

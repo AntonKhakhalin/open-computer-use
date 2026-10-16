@@ -96,6 +96,16 @@ final class LaunchAppTests: XCTestCase {
         }
     }
 
+    func testLaunchAppSuffixedNameFallsBackToNameLookup() {
+        let query = "Definitely-Not-A-Real-App-42.app"
+        XCTAssertThrowsError(try AppDiscovery.launch(query)) { error in
+            XCTAssertEqual(
+                (error as? ComputerUseError)?.errorDescription,
+                "appNotFound(\"\(query)\")"
+            )
+        }
+    }
+
     // MARK: Real launch (requires a GUI session)
 
     func testLaunchAppByBundleIdentifierThenReusesInstanceByName() throws {
