@@ -221,31 +221,12 @@ enum AppDiscovery {
             )
         }
 
-        let configuration = NSWorkspace.OpenConfiguration()
-        configuration.activates = false
-        let launchedBox = LaunchedApplicationBox()
-        let semaphore = DispatchSemaphore(value: 0)
+        let launchedApplication = try openApplication(at: appURL, activates: false, name: normalizedQuery)
 
-        NSWorkspace.shared.openApplication(at: appURL, configuration: configuration) { application, error in
-            launchedBox.application = application
-            launchedBox.error = error
-            semaphore.signal()
-        }
-
-        guard waitForSignal(semaphore) else {
+        guard let application = launchedApplication else {
             throw ComputerUseError.message(
-                "launchFailed(\"\(normalizedQuery)\"): timed out waiting for LaunchServices"
+                "launchFailed(\"\(normalizedQuery)\"): LaunchServices returned no application"
             )
-        }
-
-        if let launchError = launchedBox.error {
-            throw ComputerUseError.message(
-                "launchFailed(\"\(normalizedQuery)\"): \(launchError.localizedDescription)"
-            )
-        }
-
-        guard let application = launchedBox.application else {
-            throw ComputerUseError.appNotFound(normalizedQuery)
         }
 
         let descriptor = RunningAppDescriptor(
@@ -420,7 +401,7 @@ enum AppDiscovery {
             }
 
             if let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: query) {
-                try openApplication(at: appURL)
+                try openApplication(at: appURL, activates: true, name: query)
             }
             return
         }
@@ -433,7 +414,7 @@ enum AppDiscovery {
             return
         }
 
-        try openApplication(at: appURL)
+        try openApplication(at: appURL, activates: true, name: query)
     }
 
     private static func applicationURL(named query: String) -> URL? {
@@ -475,25 +456,31 @@ enum AppDiscovery {
         return nil
     }
 
-    private static func openApplication(at appURL: URL) throws {
+    // Single LaunchServices entry point shared by `resolve` and `launch`.
+    // LaunchServices reuses a running instance (and delivers a reopen event
+    // when it has no windows) instead of spawning a duplicate.
+    @discardableResult
+    private static func openApplication(at appURL: URL, activates: Bool, name: String) throws -> NSRunningApplication? {
         let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = activates
+        let launchedBox = LaunchedApplicationBox()
         let semaphore = DispatchSemaphore(value: 0)
-        let errorBox = LaunchErrorBox()
 
-        NSWorkspace.shared.openApplication(at: appURL, configuration: configuration) { _, error in
-            errorBox.error = error
+        NSWorkspace.shared.openApplication(at: appURL, configuration: configuration) { application, error in
+            launchedBox.application = application
+            launchedBox.error = error
             semaphore.signal()
         }
 
         guard waitForSignal(semaphore) else {
-            throw ComputerUseError.message(
-                "launchFailed(\"\(appURL.lastPathComponent)\"): timed out waiting for LaunchServices"
-            )
+            throw ComputerUseError.message("launchFailed(\"\(name)\"): timed out waiting for LaunchServices")
         }
 
-        if let launchError = errorBox.error {
-            throw launchError
+        if let launchError = launchedBox.error {
+            throw ComputerUseError.message("launchFailed(\"\(name)\"): \(launchError.localizedDescription)")
         }
+
+        return launchedBox.application
     }
 
     private static let launchServicesTimeout: TimeInterval = 20
@@ -523,10 +510,6 @@ enum AppDiscovery {
         } else {
             Thread.sleep(forTimeInterval: interval)
         }
-    }
-
-    private final class LaunchErrorBox: @unchecked Sendable {
-        var error: Error?
     }
 
     private static func recentUsageCutoff(referenceDate: Date = Date()) -> Date {
