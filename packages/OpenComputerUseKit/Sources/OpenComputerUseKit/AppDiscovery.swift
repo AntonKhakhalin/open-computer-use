@@ -202,9 +202,8 @@ enum AppDiscovery {
         }
 
         let appURL: URL
-        let fileManager = FileManager.default
-        if normalizedQuery.contains("/"), fileManager.fileExists(atPath: normalizedQuery) {
-            appURL = URL(fileURLWithPath: normalizedQuery)
+        if normalizedQuery.contains("/") {
+            appURL = try validatedApplicationURL(forPath: normalizedQuery)
         } else if isBundleIdentifierQuery(normalizedQuery) {
             guard let resolvedURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: normalizedQuery) else {
                 throw ComputerUseError.appNotFound(normalizedQuery)
@@ -265,6 +264,28 @@ enum AppDiscovery {
         }
 
         return launchResult(for: descriptor, reusedExistingInstance: false)
+    }
+
+    // Explicit paths must be an absolute, existing `.app` application bundle.
+    // `~` is expanded and symlinks are resolved so the deny-list check that
+    // follows sees the real bundle.
+    private static func validatedApplicationURL(forPath path: String) throws -> URL {
+        let expandedPath = (path as NSString).expandingTildeInPath
+        guard expandedPath.hasPrefix("/") else {
+            throw ComputerUseError.invalidArguments("app path must be an absolute path to an .app bundle")
+        }
+
+        let url = URL(fileURLWithPath: expandedPath).standardizedFileURL.resolvingSymlinksInPath()
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            throw ComputerUseError.appNotFound(path)
+        }
+
+        let isApplication = (try? url.resourceValues(forKeys: [.isApplicationKey]))?.isApplication ?? false
+        guard url.pathExtension.caseInsensitiveCompare("app") == .orderedSame, isApplication else {
+            throw ComputerUseError.invalidArguments("app path must point to an .app application bundle")
+        }
+
+        return url
     }
 
     private static func launchResult(for descriptor: RunningAppDescriptor, reusedExistingInstance: Bool) -> AppLaunchResult {
